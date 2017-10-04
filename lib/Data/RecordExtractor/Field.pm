@@ -51,7 +51,7 @@ otherwise be considered to match any field, so no need to worry about ambiguity)
 =cut
 
 has name     => ( is => 'ro', required => 1 );
-has header   => ( is => 'ro', required => 1 );
+has header   => ( is => 'lazy', default => sub { my $n= shift->name; qr/^\W*\Q$n\E\W*$/i } );
 has required => ( is => 'ro', default => sub { 1 } );
 has trim     => ( is => 'ro', default => sub { 1 } );
 has blank    => ( is => 'ro' ); # default is undef
