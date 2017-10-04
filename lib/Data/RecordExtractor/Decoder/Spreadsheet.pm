@@ -12,6 +12,8 @@ compatible with L<Spreadsheet::ParseExcel>.
 
 =head1 ATTRIBUTES
 
+See attributes from parent class: L<Data::RecordExtractor::Decoder>.
+
 =head2 C<workbook>
 
 This is an instance of L<Spreadsheet::ParseExcel>, L<Spreadsheet::ParseXLSX>,
@@ -91,13 +93,14 @@ sub _build_iterator {
 	);
 }
 
-{ package Data::RecordExtractor::Decoder::Spreadsheet::Iterator;
+{ package # Hide from CPAN
+	Data::RecordExtractor::Decoder::Spreadsheet::Iterator;
 	use strict;
 	use warnings;
 	use Carp;
 	use parent 'Data::RecordExtractor::Iterator';
 
-	sub source {
+	sub position {
 		my $f= shift->_fields;
 		'row '.${ $f->{row_ref} };
 	}

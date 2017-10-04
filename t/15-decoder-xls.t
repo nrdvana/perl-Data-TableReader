@@ -34,8 +34,10 @@ sub run_test {
 	is_deeply( $iter->(), [ ('') x 4 ], 'row 3 blank' );
 	is_deeply( $iter->(), [ 'Another', '01 Main St', 'Elsewhere', 'OH' ], 'row 4' );
 	is_deeply( $iter->(), undef, 'no row 5' );
+
 	ok( $iter->next_dataset, 'next dataset (worksheet)' );
 	is_deeply( $iter->(), [ 'Zip Codes', '', '', '', 'Cities', '', '', '', 'State Postal Codes', '', '' ], 'sheet 2, first row' );
+
 	ok( $iter->seek($pos), 'seek back to previous sheet' );
 	is_deeply( $iter->(), [ ('') x 4 ], 'row 3 blank' );
 	is_deeply( $iter->(), [ 'Another', '01 Main St', 'Elsewhere', 'OH' ], 'row 4' );

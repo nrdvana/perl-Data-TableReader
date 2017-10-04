@@ -73,13 +73,14 @@ sub _build_iterator {
 	);
 }
 
-{ package Data::RecordExtractor::Decoder::CSV::Iterator;
+{ package # Hide from CPAN
+	Data::RecordExtractor::Decoder::CSV::Iterator;
 	use strict;
 	use warnings;
 	use Carp;
 	use parent 'Data::RecordExtractor::Iterator';
 
-	sub source {
+	sub position {
 		my $f= shift->_fields;
 		'row '.${ $f->{row} };
 	}

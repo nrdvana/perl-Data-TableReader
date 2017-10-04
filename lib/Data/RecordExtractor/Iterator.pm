@@ -5,6 +5,24 @@ use Try::Tiny;
 use Carp;
 use Scalar::Util 'refaddr';
 
+=head1 SYNOPSIS
+
+  my $iter= $record_extractor->iterator;
+  while (my $rec= $iter->()) {
+    ...
+    my $position= $iter->tell;
+    print "Marking position $position"; # position stringifies to human-readable
+    ...
+    $iter->seek($position);
+  }
+  if ($iter->next_dataset) {
+    # iterate some more
+    while ($rec= $iter->()) {
+      ...
+      printf "Have processed %3d %% of the file", $iter->progress*100;
+    }
+  }
+
 =head1 DESCRIPTION
 
 This is the abstract base class for iterators used in Data::RecordExtractor,
@@ -12,7 +30,7 @@ which are blessed coderefs that return records on each call.
 
 =head1 ATTRIBUTES
 
-=head2 source
+=head2 position
 
 Return a human-readable string describing the current location within the source file.
 This will be something like C<"$filename row $row"> or C<"$filename $worksheet:$cell_id">.
