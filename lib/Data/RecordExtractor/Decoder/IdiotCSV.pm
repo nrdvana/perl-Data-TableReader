@@ -1,5 +1,6 @@
 package Data::RecordExtractor::Decoder::IdiotCSV;
-use Moo;
+
+use Moo 2;
 use Try::Tiny;
 use Carp;
 use Log::Any '$log';
@@ -35,15 +36,15 @@ which provides those defaults to the parser.
 =cut
 
 sub _build_parser {
-   my $args= shift->_parser_args || {};
-   Data::RecordExtractor::Decoder::CSV->_csv_class->new({
-      binary => 1,
-      allow_loose_quotes => 1,
-      allow_whitespace => 1,
-      auto_diag => 1,
-      escape_char => undef,
-      %$args,
-   });
+	my $args= shift->_parser_args || {};
+	Data::RecordExtractor::Decoder::CSV->_csv_class->new({
+		binary => 1,
+		allow_loose_quotes => 1,
+		allow_whitespace => 1,
+		auto_diag => 1,
+		escape_char => undef,
+		%$args,
+	});
 }
 
 1;

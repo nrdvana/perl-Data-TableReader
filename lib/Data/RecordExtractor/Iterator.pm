@@ -1,4 +1,5 @@
 package Data::RecordExtractor::Iterator;
+
 use strict;
 use warnings;
 use Try::Tiny;

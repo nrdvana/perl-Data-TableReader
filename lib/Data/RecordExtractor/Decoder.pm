@@ -1,4 +1,5 @@
 package Data::RecordExtractor::Decoder;
+
 use Moo 2;
 
 =head1 DESCRIPTION

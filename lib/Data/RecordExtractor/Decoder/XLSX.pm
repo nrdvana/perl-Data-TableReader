@@ -1,4 +1,5 @@
 package Data::RecordExtractor::Decoder::XLSX;
+
 use Moo 2;
 use Carp;
 extends 'Data::RecordExtractor::Decoder::Spreadsheet';

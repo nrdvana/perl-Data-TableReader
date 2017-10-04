@@ -1,4 +1,5 @@
 package Data::RecordExtractor::Decoder::TSV;
+
 use Moo 2;
 use Try::Tiny;
 use Carp;

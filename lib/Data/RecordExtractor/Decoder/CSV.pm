@@ -1,4 +1,5 @@
 package Data::RecordExtractor::Decoder::CSV;
+
 use Moo 2;
 use Try::Tiny;
 use Carp;
@@ -6,11 +7,11 @@ extends 'Data::RecordExtractor::Decoder';
 
 our $_csv_class;
 sub _csv_class {
-   $_csv_class ||= do {
-      eval { require Text::CSV_XS; }? 'Text::CSV_XS'
-         : eval { require Text::CSV; }? 'Text::CSV'
-         : croak "Require either Text::CSV_XS or Text::CSV : $@"
-   };
+	$_csv_class ||= do {
+		eval { require Text::CSV_XS; }? 'Text::CSV_XS'
+			: eval { require Text::CSV; }? 'Text::CSV'
+			: croak "Require either Text::CSV_XS or Text::CSV : $@"
+	};
 }
 
 =head1 DESCRIPTION

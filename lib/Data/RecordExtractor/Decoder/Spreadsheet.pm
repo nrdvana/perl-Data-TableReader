@@ -1,4 +1,5 @@
 package Data::RecordExtractor::Decoder::Spreadsheet;
+
 use Moo 2;
 use Carp 'croak';
 use IO::Handle;
