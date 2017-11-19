@@ -5,6 +5,7 @@ use Try::Tiny;
 use URI;
 use Carp;
 use Log::Any '$log';
+use List::Util 'max';
 use Module::Runtime 'require_module';
 use Data::RecordExtractor::Field;
 
@@ -14,8 +15,9 @@ use Data::RecordExtractor::Field;
 
   my $ex= Data::RecordExtractor->new(
     # path or file handle
-    input => 'path/to/file.csv',
     # let it auto-detect the format (but can override that if we need)
+    input => 'path/to/file.csv',
+    
     # We want these fields to exist in the file (identified by headers)
     fields => [
       { name => 'address', header => qw/street|address/i },
@@ -24,6 +26,7 @@ use Data::RecordExtractor::Field;
       # can validate with Type::Tiny classes
       { name => 'zip', header => qw/zip\b|postal/i, type => US_Zipcode },
     ],
+    
     # could do this after extraction, but this fixes it before the type validation
     filters => [
        # they keep losing the leading zeroes on our zip codes. grr.
@@ -32,9 +35,11 @@ use Data::RecordExtractor::Field;
          return $_[0];
        },
     ],
-    # Our data provider is horrible, just ignore any nonsense we encounter
+    
+    # Our data provider is horrible; just ignore any nonsense we encounter
     on_blank_rows => 'next',
     on_validation_fail => 'next',
+    
     # Capture warnings and show to user who uploaded file
     logger => \(my @messages)
   );
@@ -69,17 +74,20 @@ or an arrayref or hashref of arguments to build the decoder.
 
 Examples:
 
-   'CSV'
-   # becomes Data::RecordExtractor::Decoder::CSV->new()
-   [ 'CSV', sep_char => "|" ]
-   # becomes Data::RecordExtractor::Decoder::CSV->new(sep_char => "|")
-   { CLASS => 'CSV', sep_char => "|" }
-   # becomes Data::RecordExtractor::Decoder::CSV->new({ sep_char => "|" })
+  'CSV'
+  # becomes Data::RecordExtractor::Decoder::CSV->new()
+  
+  [ 'CSV', sep_char => "|" ]
+  # becomes Data::RecordExtractor::Decoder::CSV->new(sep_char => "|")
+  
+  { CLASS => 'CSV', sep_char => "|" }
+  # becomes Data::RecordExtractor::Decoder::CSV->new({ sep_char => "|" })
 
 =head2 fields
 
 An arrayref of L<Data::RecordExtractor::Field> objects (or hashrefs to
-construct them with) which this module should search for within the L</input>.
+construct them with) which this module should search for within the tables
+(worksheets etc.) of L</input>.
 
 =head2 record_class
 
@@ -118,29 +126,50 @@ to undef if you also set C<< static_field_order => 1 >>.
   on_unknown_columns => sub {
     my ($extractor, $col_headers)= @_;
     ...;
-    return $opt;
+    return $opt; # one of the above values
   }
 
 This determines handling for columns that aren't associated with any field.
-The 'warn' and 'die' options will actually call carp/croak.  If you want to
-investigate the situation yourself, pass a coderef which will receive the
-list of columns that didn't match, and can decide what action to take.
-If you use the callback, it suppresses the default warning, since you can
-generate your own.
-If you want to get cleaner default log messages, i.e. to show to users, see L</LOGGING>.
+The "required" columns must all be found before it considers this setting, but once it has
+found everything it needs to make this a candidate, you might or might not care about the
+leftover columns.
 
-The default is 'use'.
+=over
+
+=item C<'use'>  (default)
+
+You don't care if there are extra columns, just log warnings about them and proceed extracting
+from this table.
+
+=item C<'next'>
+
+Extra columns mean that you didn't find the table you wanted.  Log the near-miss, and
+keep searching additional rows or additional tables.
+
+=item C<'die'>
+
+This header is probably what you want, but you consider extra columns to be an error
+condition.  Logs the details and calls C<croak>.
+
+=item C<sub {}>
+
+You can add your own logic to handle this.  Inspect the headers however you like, and then
+return one of the above values.
+
+=back
+
+If you want to get cleaner default log messages, i.e. to show to users, see L</logger>.
 
 =head2 on_blank_rows
 
-  on_blank_rows => 'next' # warn, and then skip the rows
+  on_blank_rows => 'next' # warn, and then skip the row(s)
   on_blank_rows => 'last' # warn, and stop iterating the table
   on_blank_rows => 'die'  # fatal error
   on_blank_rows => 'use'  # actually try to return the blank rows as records
   on_blank_rows => sub {
     my ($extractor, $first_blank_rownum, $last_blank_rownum)= @_;
     ...;
-    return $opt;
+    return $opt; # one of the above values
   }
 
 This determines what happens when you've found the table, are extracting
@@ -148,9 +177,9 @@ records, and encounter a series of blank rows (defined as a row with no
 printable characters in any field) followed by non-blank rows.
 If you use the callback, it suppresses the default warning, since you can
 generate your own.
-If you want to get cleaner log messages, i.e. to show to users, see L</LOGGING>.
+If you want to get cleaner log messages, i.e. to show to users, see L</logger>.
 
-The default is 'next'.
+The default is C<'next'>.
 
 =head2 on_validation_fail
 
@@ -169,10 +198,10 @@ The default is 'next'.
 
 This determines what happens when you've found the table, are extracting
 records, and one row fails its validation.  In addition to deciding an option,
-the callback gives you a chance to alter the record before 'use'ing it.
+the callback gives you a chance to alter the record before C<'use'>ing it.
 If you use the callback, it suppresses the default warning, since you can
 generate your own.
-If you want to get cleaner log messages, i.e. to show to users, see L</LOGGING>.
+If you want to get cleaner log messages, i.e. to show to users, see L</logger>.
 
 The default is 'die'.
 
@@ -187,7 +216,7 @@ C<warn "$message\n">.  If set to an object, it should support an API of:
   warn,   is_warn
   error,  is_error
 
-such as L<Log::Any> and may other perl logging modules use.  Finally, you can
+such as L<Log::Any> and may other perl logging modules use.  You can also
 set it to a coderef such as:
 
   my @messages;
@@ -207,6 +236,7 @@ has _file_handle        => ( is => 'lazy' );
 has _decoder_arg        => ( is => 'rw', init_arg => 'decoder' );
 has decoder             => ( is => 'lazy', init_arg => undef );
 has fields              => ( is => 'rw', required => 1, coerce => \&_coerce_field_list );
+sub field_list             { @{ shift->fields } }
 has record_class        => ( is => 'rw', required => 1, default => sub { 'HASH' } );
 has filters             => ( is => 'rw' ); # list of coderefs to apply to the data
 has static_field_order  => ( is => 'rw' ); # force order of columns
@@ -215,13 +245,14 @@ has on_unknown_columns  => ( is => 'rw', default => sub { 'use' } );
 has on_blank_rows       => ( is => 'rw', default => sub { 'next' } );
 has on_validation_fail  => ( is => 'rw', default => sub { 'die' } );
 has logger              => ( is => 'rw' );
+has iterator            => ( is => 'lazy' );
 
 sub _build__file_handle {
-   my $self= shift;
-   my $i= $self->input;
-   return $i if ref($i) && (ref($i) eq 'GLOB' or ref($i)->can('read'));
-   open(my $fh, '<', $i) or croak "open($i): $!";
-   return $fh;
+	my $self= shift;
+	my $i= $self->input;
+	return $i if ref($i) && (ref($i) eq 'GLOB' or ref($i)->can('read'));
+	open(my $fh, '<', $i) or croak "open($i): $!";
+	return $fh;
 }
 
 sub _build_decoder {
@@ -261,47 +292,6 @@ sub _build_decoder {
 	);
 }
 
-sub detect_input_format {
-   my $self= shift;
-   
-   my $magic= '';
-   my $input= $self->input || '';
-   my ($suffix)= ($input =~ /\.([^.]+)$/);
-   $suffix= defined $suffix? uc($suffix) : '';
-   
-   my $fh= $self->_file_handle;
-   my $fpos= $fh->tell;
-   if (defined $fpos && $fpos >= 0) {
-      $fh->read($magic, 4096);
-      $fh->seek($fpos, 0) or croak "seek: $!";
-   }
-   
-   # Excel is obvious so check it first.  This handles cases where an excel file is
-   # erroneously named ".csv" and sillyness like that.
-   return ( 'XLSX' ) if $magic =~ /^PK/;
-   return ( 'XLS'  ) if $magic =~ /^\xD0\xCF\x11\xE0/;
-   
-   # Else trust the file extension
-   return $suffix if length $suffix;
-   
-   # Else probe some more...
-   $log->debug("Probing file format because no filename suffix");
-   length $magic or croak "Can't probe format. No filename suffix, and ".($fpos >= 0? "unseekable file handle" : "no content");
-   
-   my ($probably_csv, $probably_tsv)= (0,0);
-   ++$probably_csv if $magic =~ /^["']?[\w ]+["']?,/;
-   ++$probably_tsv if $magic =~ /^["']?[\w ]+["']?\t/;
-   my $comma_count= ($magic =~ /,/g);
-   my $tab_count= ($magic =~ /\t/g);
-   my $eol_count= ($magic =~ /\n/g);
-   ++$probably_csv if $comma_count > $eol_count and $comma_count > $tab_count;
-   ++$probably_tsv if $tab_count > $eol_count and $tab_count > $comma_count;
-   return 'CSV' if $probably_csv and $probably_csv > $probably_tsv;
-   return 'TSV' if $probably_tsv and $probably_tsv > $probably_csv;
-   
-   croak "Can't determine file format";
-}
-
 sub _coerce_field_list {
 	my ($list)= @_;
 	defined $list and ref $list eq 'ARRAY' or croak "'fields' must be a non-empty arrayref";
@@ -319,6 +309,251 @@ sub _coerce_field_list {
 		}
 	}
 	return \@list;
+}
+
+=head1 METHODS
+
+=head2 detect_input_format
+
+This is used internally to detect the format of a file, but you can call it manually if you
+like.  The first argument (optional) is a file name, and the second argument (also optional)
+is the first few hundred bytes of the file.  Missing arguments will be pulled from L</input>
+if possible.  The return value is the best guess of module name and constructor arguments that
+should be used to parse the file.  However, this doesn't guarantee such module actually exists
+or is installed; it might just echo the file extension back to you.
+
+=cut
+
+sub detect_input_format {
+	my ($self, $filename, $magic)= @_;
+	# Detect filename if not supplied
+	if (!defined $filename) {
+		my $input= $self->input;
+		$filename= '';
+		$filename= "$input" if defined $input and (!ref $input || ref($input) =~ /path|file/i);
+	}
+	my ($suffix)= ($filename =~ /\.([^.]+)$/);
+	$suffix= defined $suffix? uc($suffix) : '';
+	# Load first block of file, unless supplied
+	my $fpos;
+	if (!defined $magic) {
+		my $fh= $self->_file_handle;
+		$fpos= $fh->tell;
+		if (defined $fpos && $fpos >= 0) {
+			$fh->read($magic, 4096);
+			$fh->seek($fpos, 0) or croak "seek: $!";
+		} else {
+			$magic= '';
+		}
+	}
+
+	# Excel is obvious so check it first.  This handles cases where an excel file is
+	# erroneously named ".csv" and sillyness like that.
+	return ( 'XLSX' ) if $magic =~ /^PK(\x03\x04|\x05\x06|\x07\x08)/;
+	return ( 'XLS'  ) if $magic =~ /^\xD0\xCF\x11\xE0/;
+
+	# Else trust the file extension
+	return $suffix if length $suffix;
+
+	# Else probe some more...
+	$log->debug("Probing file format because no filename suffix");
+	length $magic or croak "Can't probe format. No filename suffix, and ".($fpos >= 0? "unseekable file handle" : "no content");
+
+	my ($probably_csv, $probably_tsv)= (0,0);
+	++$probably_csv if $magic =~ /^["']?[\w ]+["']?,/;
+	++$probably_tsv if $magic =~ /^["']?[\w ]+["']?\t/;
+	my $comma_count= ($magic =~ /,/g);
+	my $tab_count= ($magic =~ /\t/g);
+	my $eol_count= ($magic =~ /\n/g);
+	++$probably_csv if $comma_count > $eol_count and $comma_count > $tab_count;
+	++$probably_tsv if $tab_count > $eol_count and $tab_count > $comma_count;
+	return 'CSV' if $probably_csv and $probably_csv > $probably_tsv;
+	return 'TSV' if $probably_tsv and $probably_tsv > $probably_csv;
+
+	croak "Can't determine file format";
+}
+
+=head2 find_table
+
+Search through the input for the beginning of the records, identified by a header row matching
+the various constraints defined in L</fields>.  If L</header_row_at> is undef, then this does
+nothing and assumes success.
+
+Returns a boolean of whether it succeeded.  This method does B<not> C<croak> on failure like
+L</iterator> does, on the assumption that you want to handle them gracefully.
+All diagnostics about the search are logged via L</logger>.
+
+=cut
+
+sub find_table {
+	shift->_find_table(0);
+}
+
+=head2 iterator
+
+Begin iterating records.  If the table has not been located, then find it and C<croak> if it
+can't be found.
+
+There is only one iterator (because there is only one L</input> file handle) so multiple calls
+to this method return the same L<iterator object|Data::RecordExtractor::Iterator>.
+You may be able to L<seek|Data::RecordExtractor::Iterator/seek> on the iterator if the
+L<decoder|Data::RecordExtractor::Decoder> or L</input> handle support that.
+
+=cut
+
+sub _build_iterator {
+	my $self= shift;
+	my $col_fields= $self->_find_table(1);
+	my $dec_iter= $self->decoder->iterator;
+	my $code= sub {
+		...;
+	};
+}
+
+sub _find_table {
+	my ($self, $croak_on_fail)= @_;
+	my $col_fields= $self->_find_table_in_current_dataset;
+	while (!$col_fields && $self->decoder->iterator->next_dataset) {
+		$col_fields= $self->_find_table_in_current_dataset;
+	}
+	return $col_fields if $col_fields or !$croak_on_fail;
+	croak "Can't locate valid header";
+}
+
+sub _find_table_in_current_dataset {
+	my ($self, $croak_on_fail)= @_;
+	# If header_row_at is undef, then there is no header.
+	# Ensure static_field_order, then set up columns.
+	my @fields= $self->field_list;
+	my $header_at= $self->header_row_at;
+	if (!defined $header_at) {
+		unless ($self->static_field_order) {
+			$self->_write_log('error', my $msg= "You must enable 'static_field_order' if there is no header row");
+			croak $msg if $croak_on_fail;
+			return;
+		}
+		return \@fields;
+	}
+	
+	# If headers contain "\n", we need to collect multiple cells per column
+	my $row_accum= max map { 1+($_->header_regex =~ /\n/g) } @fields;
+	
+	my ($start, $end)= ref $header_at? @$header_at : ( $header_at, $header_at );
+	my $iter= $self->decoder->iterator;
+	my @rows;
+	
+	# If header_row_at doesn't start at 1, seek forward
+	push @rows, $iter->() for 1..$start-1;
+	
+	# Scan through the rows of the dataset up to the end of header_row_at, accumulating rows so that
+	# multi-line regexes can match.
+	my @cols;
+	row: for ($start..$end) {
+		push @rows, $iter->() || return; # if undef, we reached end of dataset
+		splice @rows, 0, @rows-$row_accum; # only need to retain $row_accum number of rows
+		my $vals= $row_accum == 1? $rows[-1]
+			: [ map { my $c= $_; join("\n", map $_->[$c], @rows) } 0 .. $#{$rows[-1]} ];
+		# If static field order, look for headers in sequence
+		if ($self->static_field_order) {
+			for my $i (0 .. $#fields) {
+				next if $vals->[$i] =~ $fields[$i]->header_regex;
+				
+				# Field header doesn't match.  Start over on next row.
+				$self->_write_log('debug', 'Missing field %s on %s', $fields[$i]->name, $iter->position);
+				next row;
+			}
+			# found a match for every field!
+			@cols= @fields;
+			last row;
+		}
+		# else search for each header
+		else {
+			my %col_map;
+			my @free_fields= grep { !$_->follows_list } @fields;
+			my @follows_fields= grep { $_->follows_list } @fields;
+			# Sort required first, to fail faster on non-matching rows
+			for my $f (sort { $a->required? -1 : $b->required? 1 : 0 } @free_fields) {
+				my $hr= $f->header_regex;
+				my @found= grep { $vals->[$_] =~ $hr } 0 .. $#$vals;
+				if (@found == 1) {
+					if ($col_map{$found[0]}) {
+						$self->_write_log('warn', 'Field %s and %s both match at %s', $f->name, $col_map{$found[0]}->name, $iter->position);
+						next row;
+					}
+					$col_map{$found[0]}= $f;
+				}
+				elsif (@found > 1) {
+					if ($f->array) {
+						# Array columns may be found more than once
+						$col_map{$_}= $f for @found;
+					} else {
+						$self->_write_log('warn', 'Field %s matches more than one column at %s', $f->name, $iter->position);
+						next row;
+					}
+				}
+				elsif ($f->required) {
+					$self->_write_log('debug', 'No match for required field %s at %s', $f->name, $iter->position);
+					next row;
+				}
+				# else Not required, and not found
+			}
+			# Need to have found at least one column (even if none required)
+			unless (keys %col_map) {
+				$self->_write_log('debug', 'No fields matched at %s', $iter->position);
+				next row;
+			}
+			# Now, check for any of the 'follows' fields, some of which might also be 'required'.
+			if (@follows_fields) {
+				my %following;
+				my %found;
+				for my $i (0 .. $#$vals) {
+					if ($col_map{$i}) {
+						%following= ( $col_map{$i}->name => $col_map{$i} );
+					} else {
+						my $val= $vals->[$i];
+						my @match;
+						for my $f (@follows_fields) {
+							next unless grep $following{$_}, $f->follows_list;
+							push @match, $f if $val =~ $f->header_regex;
+						}
+						if (@match == 1) {
+							if ($found{$match[0]} && !$match[0]->array) {
+								$self->_write_log('error', 'Field %s matches multiple columns at %s', $match[0]->name, $iter->position);
+								next row;
+							}
+							$col_map{$i}= $match[0];
+							$found{$match[0]}= $i;
+							$following{$match[0]->name}= $match[0];
+						}
+						elsif (@match > 1) {
+							$self->_write_log('error', 'Field %s and %s both match at %s', $match[0]->name, $match[1]->name, $iter->position);
+							next row;
+						}
+						else {
+							%following= ();
+						}
+					}
+				}
+				# Check if any of the 'follows' fields were required
+				if (my @unfound= grep { !$found{$_} && $_->required } @follows_fields) {
+					$self->_write_log('debug', 'No match for required field %s at %s', $_->name, $iter->position)
+						for @unfound;
+				}
+			}
+			# Now, if there are any un-claimed columns, handle per 'on_unknown_columns' setting.
+			my @unclaimed= grep { !$col_map{$_} } 0 .. $#$vals;
+			if (@unclaimed) {
+				...
+			}
+			@cols= map $col_map{$_}, 0 .. $#$vals;
+			last row;
+		}
+	}
+	unless (@cols) {
+		$self->_write_log('warn', 'No row in dataset matched full header requirements');
+		return;
+	}
+	return \@cols;
 }
 
 1;

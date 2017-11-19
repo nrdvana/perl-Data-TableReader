@@ -4,8 +4,8 @@ use warnings;
 use Test::More;
 use File::Spec::Functions 'catfile';
 
-use_ok( 'Data::RecordExtractor::Field' ) or die;
-use_ok( 'Data::RecordExtractor' ) or die;
+use_ok( 'Data::RecordExtractor::Field' ) or BAIL_OUT;
+use_ok( 'Data::RecordExtractor' ) or BAIL_OUT;
 
 subtest basic => sub {
 	my $ex= new_ok( 'Data::RecordExtractor', [

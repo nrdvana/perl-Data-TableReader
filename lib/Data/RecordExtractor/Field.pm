@@ -42,7 +42,7 @@ If you set the header to C<undef>, it means the column is not identified by a he
 position must be determined by it's relation to other fields.
 
 (If your data actually doesn't have a header and you want to assume the columns match the
-fields, see extractor attribute L<Data::RecordExtractor/header_location>)
+fields, see extractor attribute L<Data::RecordExtractor/header_row_at>)
 
 =head2 required
 
@@ -121,6 +121,7 @@ has blank    => ( is => 'ro' ); # default is undef
 has type     => ( is => 'ro', isa => sub { $_[0]->can('check') }, required => 0 );
 has array    => ( is => 'ro' );
 has follows  => ( is => 'ro' );
+sub follows_list { my $f= shift->follows; ref $f? @$f : defined $f? ( $f ) : () }
 
 =head2 header_regex
 
@@ -140,7 +141,7 @@ sub _build_header_regex {
 	return $h if ref($h) eq 'Regexp';
 	my $pattern= join "[\\W_]*", map "\Q$_\E", grep { defined && length }
 		split /(\n)|\s+|(\W)/, $h; # capture newline or non-word, except for other whitespace
-	return qr/^[\W_]*$pattern[\W_]*$/i;
+	return qr/^[\W_]*$pattern[\W_]*$/im;
 }
 
 1;
