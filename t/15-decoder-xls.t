@@ -28,19 +28,19 @@ sub run_test {
 
 	ok( my $iter= $decoder->iterator, 'got iterator' );
 
-	is_deeply( $iter->(), [ 'Name', 'Address', 'City', 'State' ], 'row 1' );
-	is_deeply( $iter->(), [ 'Someone', '123 Long St', 'Somewhere', 'OH' ], 'row 2' );
+	is_deeply( $iter->(), [ 'Name', 'Address', 'City', 'State', 'Zip' ], 'row 1' );
+	is_deeply( $iter->(), [ 'Someone', '123 Long St', 'Somewhere', 'OH', 45678 ], 'row 2' );
 	ok( my $pos= $iter->tell, 'tell position' );
-	is_deeply( $iter->(), [ ('') x 4 ], 'row 3 blank' );
-	is_deeply( $iter->(), [ 'Another', '01 Main St', 'Elsewhere', 'OH' ], 'row 4' );
+	is_deeply( $iter->(), [ ('') x 5 ], 'row 3 blank' );
+	is_deeply( $iter->(), [ 'Another', '01 Main St', 'Elsewhere', 'OH', 45678 ], 'row 4' );
 	is_deeply( $iter->(), undef, 'no row 5' );
 
 	ok( $iter->next_dataset, 'next dataset (worksheet)' );
 	is_deeply( $iter->(), [ 'Zip Codes', '', '', '', 'Cities', '', '', '', 'State Postal Codes', '', '' ], 'sheet 2, first row' );
 
 	ok( $iter->seek($pos), 'seek back to previous sheet' );
-	is_deeply( $iter->(), [ ('') x 4 ], 'row 3 blank' );
-	is_deeply( $iter->(), [ 'Another', '01 Main St', 'Elsewhere', 'OH' ], 'row 4' );
+	is_deeply( $iter->(), [ ('') x 5 ], 'row 3 blank' );
+	is_deeply( $iter->(), [ 'Another', '01 Main St', 'Elsewhere', 'OH', 45678 ], 'row 4' );
 	is_deeply( $iter->(), undef, 'no row 5' );
 }
 

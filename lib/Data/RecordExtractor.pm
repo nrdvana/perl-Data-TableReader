@@ -245,7 +245,9 @@ has on_unknown_columns  => ( is => 'rw', default => sub { 'use' } );
 has on_blank_rows       => ( is => 'rw', default => sub { 'next' } );
 has on_validation_fail  => ( is => 'rw', default => sub { 'die' } );
 has logger              => ( is => 'rw' );
-has iterator            => ( is => 'lazy' );
+has col_map             => ( is => 'rw', lazy => 1, builder => 1, predicate => 1, clearer => 1 );
+has field_map           => ( is => 'rw', lazy => 1, builder => 1, predicate => 1, clearer => 1 );
+has iterator            => ( is => 'lazy', predicate => 1, clearer => 1 );
 
 sub _build__file_handle {
 	my $self= shift;
@@ -386,7 +388,34 @@ All diagnostics about the search are logged via L</logger>.
 =cut
 
 sub find_table {
-	shift->_find_table(0);
+	my $self= shift;
+	return 1 if $self->has_col_map;
+	my $colmap= $self->_find_table(0);
+	$self->col_map($colmap) if $colmap;
+	return !!$colmap;
+}
+
+sub _build_col_map {
+	shift->_find_table(1);
+}
+sub _build_field_map {
+	my $col_map= shift->col_map;
+	my %fmap;
+	for my $i (0 .. $#$col_map) {
+		next unless $col_map->[$i];
+		if ($col_map->[$i]->array) {
+			push @{ $fmap{$col_map->[$i]->name} }, $i;
+		} else {
+			$fmap{$col_map->[$i]->name}= $i;
+		}
+	}
+	\%fmap;
+}
+
+sub _write_log {
+	my ($self, $level, $msg, @args)= @_;
+	$level.='f' if @args;
+	$self->logger->$level($msg, @args);
 }
 
 =head2 iterator
@@ -403,11 +432,41 @@ L<decoder|Data::RecordExtractor::Decoder> or L</input> handle support that.
 
 sub _build_iterator {
 	my $self= shift;
-	my $col_fields= $self->_find_table(1);
-	my $dec_iter= $self->decoder->iterator;
-	my $code= sub {
-		...;
+	my $data_iter= $self->decoder->iterator;
+	my $col_map= $self->col_map;
+	my $fields= $self->fields;
+   
+	my (@col_idx, @field_names, @trim_idx, $class);
+	if ($self->record_class eq 'ARRAY') {
+		my $field_map= $self->field_map;
+		@col_idx= map { defined $_? $_ : 999999999 } map { $col_map->{$_->name} } @$fields;
+		@trim_idx= grep { $fields->[$_]->trim } 0 .. $#$fields;
+	}
+	else {
+	  @field_names= keys %$col_map;
+	  @col_idx= values %$col_map;
+	  my %trim_names= map { $_->trim? ( $_->name => 1 ) : () } @$fields;
+	  @trim_idx= map { $col_map->{$_} } grep { $trim_names{$_} } @field_names;
+	  $class= $self->record_class
+		 unless 'HASH' eq $self->record_class;
+	}
+	my $sub= sub {
+	  my $row= $data_iter->(\@col_idx);
+	  for (@{$row}[@trim_idx]) {
+		 $_ =~ s/\s+$//;
+		 $_ =~ s/^\s+//;
+	  }
+	  return $row unless @field_names;
+	  my %rec;
+	  @rec{@field_names}= @$row;
+	  return $class? $class->new(\%rec) : \%rec;
 	};
+	return Data::RecordExtractor::RecordIterator->new(
+	  $sub,
+	  {
+		 data_iter => $data_iter
+	  },
+	);
 }
 
 sub _find_table {
@@ -543,7 +602,22 @@ sub _find_table_in_current_dataset {
 			# Now, if there are any un-claimed columns, handle per 'on_unknown_columns' setting.
 			my @unclaimed= grep { !$col_map{$_} } 0 .. $#$vals;
 			if (@unclaimed) {
-				...
+				my $act= $self->on_unknown_columns;
+				my $unknown_list= join(', ', map $vals->[$_], @unclaimed);
+				$act= $act->($self, \@cols) if ref $act eq 'CODE';
+				if ($act eq 'use') {
+					$self->_write_log('warn', 'Ignoring unknown columns: %s', $unknown_list);
+				} elsif ($act eq 'next') {
+					$self->_write_log('warn', '%s would match except for unknown columns: %s',
+						$iter->position, $unknown_list);
+					next row;
+				} elsif ($act eq 'die') {
+					my $msg= "Header row includes unknown columns: $unknown_list";
+					$self->_write_log('error', $msg);
+					croak $msg;
+				} else {
+					croak "Invalid action '$act' for 'on_unknown_columns'";
+				}
 			}
 			@cols= map $col_map{$_}, 0 .. $#$vals;
 			last row;
