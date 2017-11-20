@@ -25,6 +25,8 @@ subtest basic => sub {
 	ok( $ex->find_table, 'found table' );
 	is_deeply( $ex->col_map, [@{ $ex->fields }[99,0,1,2,3]], 'col map' );
 	is_deeply( $ex->field_map, { address => 1, city => 2, state => 3, zip => 4 }, 'field map' );
+	ok( my $i= $ex->iterator, 'iterator' );
+	is_deeply( $i->(), { address => '123 Long St', city => 'Somewhere', state => 'OH', zip => '45678' }, 'first row' );
 };
 
 done_testing;

@@ -70,16 +70,22 @@ sub _build_iterator {
 	my ($colmin, $colmax)= $sheet? $sheet->col_range() : (0,-1);
 	my ($rowmin, $rowmax)= $sheet? $sheet->row_range() : (0,-1);
 	my $row= $rowmin-1;
-	Data::RecordExtractor::Decoder::Spreadsheet::Iterator->new(
+	Data::RecordExtractor::Decoder::Spreadsheet::_Iterator->new(
 		sub {
 			my $slice= shift;
 			return undef unless $row < $rowmax;
 			++$row;
 			my $x;
 			if ($slice) {
-				return [ map { $x= ($x= $sheet->get_cell($row, $_)) && $x->value; defined $x? $x : '' } @$slice ];
+				return [ map {
+					$x= ($x= $sheet->get_cell($row, $_)) && $x->value;
+					defined $x? $x : ''
+				} @$slice ];
 			} else {
-				return [ map { $x= ($x= $sheet->get_cell($row, $_)) && $x->value; defined $x? $x : '' } 0 .. $colmax ];
+				return [ map {
+					$x= ($x= $sheet->get_cell($row, $_)) && $x->value;
+					defined $x? $x : ''
+				} 0 .. $colmax ];
 			}
 		},
 		{
@@ -95,7 +101,7 @@ sub _build_iterator {
 }
 
 { package # Hide from CPAN
-	Data::RecordExtractor::Decoder::Spreadsheet::Iterator;
+	Data::RecordExtractor::Decoder::Spreadsheet::_Iterator;
 	use strict;
 	use warnings;
 	use Carp;

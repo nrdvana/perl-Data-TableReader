@@ -4,7 +4,6 @@ use Moo 2;
 use Try::Tiny;
 use URI;
 use Carp;
-use Log::Any '$log';
 use List::Util 'max';
 use Module::Runtime 'require_module';
 use Data::RecordExtractor::Field;
@@ -237,6 +236,7 @@ has _decoder_arg        => ( is => 'rw', init_arg => 'decoder' );
 has decoder             => ( is => 'lazy', init_arg => undef );
 has fields              => ( is => 'rw', required => 1, coerce => \&_coerce_field_list );
 sub field_list             { @{ shift->fields } }
+has field_by_name       => ( is => 'lazy' );
 has record_class        => ( is => 'rw', required => 1, default => sub { 'HASH' } );
 has filters             => ( is => 'rw' ); # list of coderefs to apply to the data
 has static_field_order  => ( is => 'rw' ); # force order of columns
@@ -244,7 +244,8 @@ has header_row_at       => ( is => 'rw', default => sub { [1,10] } ); # row of h
 has on_unknown_columns  => ( is => 'rw', default => sub { 'use' } );
 has on_blank_rows       => ( is => 'rw', default => sub { 'next' } );
 has on_validation_fail  => ( is => 'rw', default => sub { 'die' } );
-has logger              => ( is => 'rw' );
+has logger              => ( is => 'rw', trigger => sub { shift->_clear_logger } );
+has _logger             => ( is => 'lazy', predicate => 1, clearer => 1 );
 has col_map             => ( is => 'rw', lazy => 1, builder => 1, predicate => 1, clearer => 1 );
 has field_map           => ( is => 'rw', lazy => 1, builder => 1, predicate => 1, clearer => 1 );
 has iterator            => ( is => 'lazy', predicate => 1, clearer => 1 );
@@ -313,6 +314,12 @@ sub _coerce_field_list {
 	return \@list;
 }
 
+sub _build_field_by_name {
+	my $self= shift;
+	# reverse list so first field of a name takes precedence
+	{ map { $_->name => $_ } reverse @{ $self->fields } }
+}
+
 =head1 METHODS
 
 =head2 detect_input_format
@@ -358,7 +365,7 @@ sub detect_input_format {
 	return $suffix if length $suffix;
 
 	# Else probe some more...
-	$log->debug("Probing file format because no filename suffix");
+	$self->_write_log('debug',"Probing file format because no filename suffix");
 	length $magic or croak "Can't probe format. No filename suffix, and ".($fpos >= 0? "unseekable file handle" : "no content");
 
 	my ($probably_csv, $probably_tsv)= (0,0);
@@ -435,37 +442,69 @@ sub _build_iterator {
 	my $data_iter= $self->decoder->iterator;
 	my $col_map= $self->col_map;
 	my $fields= $self->fields;
-   
-	my (@col_idx, @field_names, @trim_idx, $class);
+	my $field_map= $self->field_map;
+	my @row_slice; # one column index per field, and possibly extra column indicies for array_val_map
+	my @arrayvals; # list of source index and destination index for building array values
+	my @field_names; # ordered list of field names where row slice should be assigned
+	my @trim_idx;  # list of array indicies which should be whitespace-trimmed.
+	my $class;     # optional object class for the resulting rows
+
+	# If result is array, the slice of the row must match the position of the fields in the
+	#  $self->fields array.  If a field was not found it will get an undef for that slot.
+	# It also results in an undef for secondary fields of the same name as the first.
 	if ($self->record_class eq 'ARRAY') {
-		my $field_map= $self->field_map;
-		@col_idx= map { defined $_? $_ : 999999999 } map { $col_map->{$_->name} } @$fields;
-		@trim_idx= grep { $fields->[$_]->trim } 0 .. $#$fields;
+		my %remaining= %$field_map;
+		@row_slice= map {
+			my $src= delete $remaining{$_->name};
+			defined $src? $src : 0x7FFFFFFF
+			} @$fields;
 	}
+	# If result is anything else, then only slice out the columns that are used for the fields
+	# that we located.
 	else {
-	  @field_names= keys %$col_map;
-	  @col_idx= values %$col_map;
-	  my %trim_names= map { $_->trim? ( $_->name => 1 ) : () } @$fields;
-	  @trim_idx= map { $col_map->{$_} } grep { $trim_names{$_} } @field_names;
-	  $class= $self->record_class
-		 unless 'HASH' eq $self->record_class;
+		$class= $self->record_class
+			unless 'HASH' eq $self->record_class;
+		@field_names= keys %$field_map;
+		@row_slice= values %$field_map;
 	}
+	# For any field whose value is an array of more that one source column,
+	#  encode those details in @arrayvals, and update @row_slice and @trim_idx accordingly
+	for (0 .. $#row_slice) {
+		if (!ref $row_slice[$_]) {
+			push @trim_idx, $_ if $col_map->[$row_slice[$_]]->trim;
+		}
+		else {
+			# This field is an array-value, so add the src columns to @row_slice
+			#  and list it in @arrayvals, and update @trim_idx if needed
+			my $src= $row_slice[$_];
+			$row_slice[$_]= 0x7FFFFFFF;
+			my $from= @row_slice;
+			push @row_slice, @$src;
+			push @arrayvals, [ $_, $from, scalar @$src ];
+			push @trim_idx, grep { $col_map->[$row_slice[$_]]->trim } $from .. $#row_slice;
+		}
+	}
+	@arrayvals= reverse @arrayvals;
 	my $sub= sub {
-	  my $row= $data_iter->(\@col_idx);
-	  for (@{$row}[@trim_idx]) {
-		 $_ =~ s/\s+$//;
-		 $_ =~ s/^\s+//;
-	  }
-	  return $row unless @field_names;
-	  my %rec;
-	  @rec{@field_names}= @$row;
-	  return $class? $class->new(\%rec) : \%rec;
+		# Pull the specific slice of the next row that we need
+		my $row= $data_iter->(\@row_slice);
+		# Apply 'trim' to any column whose field requested it
+		for (@{$row}[@trim_idx]) {
+			$_ =~ s/\s+$//;
+			$_ =~ s/^\s+//;
+		}
+		# Collect all the array-valued fields from the tail of the row
+		$row->[$_->[0]]= [ splice @$row, $_->[1], $_->[2] ] for @arrayvals;
+		# stop here if the return class is 'ARRAY'
+		return $row unless @field_names;
+		# Convert the row to a hashref
+		my %rec;
+		@rec{@field_names}= @$row;
+		# Construct a class, if requested, else return hashref
+		return $class? $class->new(\%rec) : \%rec;
 	};
-	return Data::RecordExtractor::RecordIterator->new(
-	  $sub,
-	  {
-		 data_iter => $data_iter
-	  },
+	return Data::RecordExtractor::_RecordIterator->new(
+		$sub, { data_iter => $data_iter },
 	);
 }
 
@@ -628,6 +667,28 @@ sub _find_table_in_current_dataset {
 		return;
 	}
 	return \@cols;
+}
+
+{ package # Hide from CPAN
+	Data::RecordExtractor::_RecordIterator;
+	use strict;
+	use warnings;
+	use parent 'Data::RecordExtractor::Iterator';
+	sub position {
+		shift->_fields->data_iter->position(@_);
+	}
+	sub progress {
+		shift->_fields->data_iter->progress(@_);
+	}
+	sub tell {
+		shift->_fields->data_iter->tell(@_);
+	}
+	sub seek {
+		shift->_fields->data_iter->seek(@_);
+	}
+	sub next_dataset {
+		shift->_fields->data_iter->next_dataset(@_);
+	}
 }
 
 1;
