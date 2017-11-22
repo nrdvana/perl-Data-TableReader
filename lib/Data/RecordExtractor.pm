@@ -424,6 +424,18 @@ sub _write_log {
 	$level.='f' if @args;
 	$self->logger->$level($msg, @args);
 }
+sub _write_log_at_input {
+	my ($self, $level, $msg, @args)= @_;
+	$level .= 'f';
+	if (@args) {
+		$msg .= 'at %s';
+		push @args, $self->decoder->iterator->position;
+	} else {
+		push @args, $msg, $self->decoder->iterator->position;
+		$msg= "%s at %s";
+	}
+	$self->logger->$level($msg, @args);
+}
 
 =head2 iterator
 
@@ -447,6 +459,7 @@ sub _build_iterator {
 	my @arrayvals; # list of source index and destination index for building array values
 	my @field_names; # ordered list of field names where row slice should be assigned
 	my @trim_idx;  # list of array indicies which should be whitespace-trimmed.
+	my @blank_val; # blank value per each fetched column
 	my $class;     # optional object class for the resulting rows
 
 	# If result is array, the slice of the row must match the position of the fields in the
@@ -471,7 +484,9 @@ sub _build_iterator {
 	#  encode those details in @arrayvals, and update @row_slice and @trim_idx accordingly
 	for (0 .. $#row_slice) {
 		if (!ref $row_slice[$_]) {
-			push @trim_idx, $_ if $col_map->[$row_slice[$_]]->trim;
+			my $field= $col_map->[$row_slice[$_]];
+			push @trim_idx, $_ if $field->trim;
+			push @blank_val, $field->blank;
 		}
 		else {
 			# This field is an array-value, so add the src columns to @row_slice
@@ -481,7 +496,11 @@ sub _build_iterator {
 			my $from= @row_slice;
 			push @row_slice, @$src;
 			push @arrayvals, [ $_, $from, scalar @$src ];
-			push @trim_idx, grep { $col_map->[$row_slice[$_]]->trim } $from .. $#row_slice;
+			for ($from .. $#row_slice) {
+				my $field= $col_map->[$row_slice[$_]];
+				push @trim_idx, $_ if $field->trim;
+				push @blank_val, $field->blank;
+			}
 		}
 	}
 	@arrayvals= reverse @arrayvals;
@@ -489,10 +508,13 @@ sub _build_iterator {
 		# Pull the specific slice of the next row that we need
 		my $row= $data_iter->(\@row_slice);
 		# Apply 'trim' to any column whose field requested it
-		for (@{$row}[@trim_idx]) {
+		for (grep { defined } @{$row}[@trim_idx]) {
 			$_ =~ s/\s+$//;
 			$_ =~ s/^\s+//;
 		}
+		# Apply 'blank value' to every column which is zero length
+		$row->[$_]= $blank_val[$_]
+			for grep { !defined $row->[$_] || !length $row->[$_] } 0..$#$row;
 		# Collect all the array-valued fields from the tail of the row
 		$row->[$_->[0]]= [ splice @$row, $_->[1], $_->[2] ] for @arrayvals;
 		# stop here if the return class is 'ARRAY'
@@ -510,16 +532,17 @@ sub _build_iterator {
 
 sub _find_table {
 	my ($self, $croak_on_fail)= @_;
-	my $col_fields= $self->_find_table_in_current_dataset;
+	my %cache;
+	my $col_fields= $self->_find_table_in_current_dataset(\%cache);
 	while (!$col_fields && $self->decoder->iterator->next_dataset) {
-		$col_fields= $self->_find_table_in_current_dataset;
+		$col_fields= $self->_find_table_in_current_dataset(\%cache);
 	}
 	return $col_fields if $col_fields or !$croak_on_fail;
 	croak "Can't locate valid header";
 }
 
 sub _find_table_in_current_dataset {
-	my ($self, $croak_on_fail)= @_;
+	my ($self, $croak_on_fail, $cache)= @_;
 	# If header_row_at is undef, then there is no header.
 	# Ensure static_field_order, then set up columns.
 	my @fields= $self->field_list;
@@ -545,128 +568,135 @@ sub _find_table_in_current_dataset {
 	
 	# Scan through the rows of the dataset up to the end of header_row_at, accumulating rows so that
 	# multi-line regexes can match.
-	my @cols;
-	row: for ($start..$end) {
-		push @rows, $iter->() || return; # if undef, we reached end of dataset
+	for ($start..$end) {
+		push @rows, $iter->() || last; # if undef, we reached end of dataset
 		splice @rows, 0, @rows-$row_accum; # only need to retain $row_accum number of rows
 		my $vals= $row_accum == 1? $rows[-1]
 			: [ map { my $c= $_; join("\n", map $_->[$c], @rows) } 0 .. $#{$rows[-1]} ];
-		# If static field order, look for headers in sequence
-		if ($self->static_field_order) {
-			for my $i (0 .. $#fields) {
-				next if $vals->[$i] =~ $fields[$i]->header_regex;
-				
-				# Field header doesn't match.  Start over on next row.
-				$self->_write_log('debug', 'Missing field %s on %s', $fields[$i]->name, $iter->position);
-				next row;
-			}
-			# found a match for every field!
-			@cols= @fields;
-			last row;
-		}
-		# else search for each header
-		else {
-			my %col_map;
-			my @free_fields= grep { !$_->follows_list } @fields;
-			my @follows_fields= grep { $_->follows_list } @fields;
-			# Sort required first, to fail faster on non-matching rows
-			for my $f (sort { $a->required? -1 : $b->required? 1 : 0 } @free_fields) {
-				my $hr= $f->header_regex;
-				my @found= grep { $vals->[$_] =~ $hr } 0 .. $#$vals;
-				if (@found == 1) {
-					if ($col_map{$found[0]}) {
-						$self->_write_log('warn', 'Field %s and %s both match at %s', $f->name, $col_map{$found[0]}->name, $iter->position);
-						next row;
-					}
-					$col_map{$found[0]}= $f;
-				}
-				elsif (@found > 1) {
-					if ($f->array) {
-						# Array columns may be found more than once
-						$col_map{$_}= $f for @found;
-					} else {
-						$self->_write_log('warn', 'Field %s matches more than one column at %s', $f->name, $iter->position);
-						next row;
-					}
-				}
-				elsif ($f->required) {
-					$self->_write_log('debug', 'No match for required field %s at %s', $f->name, $iter->position);
-					next row;
-				}
-				# else Not required, and not found
-			}
-			# Need to have found at least one column (even if none required)
-			unless (keys %col_map) {
-				$self->_write_log('debug', 'No fields matched at %s', $iter->position);
-				next row;
-			}
-			# Now, check for any of the 'follows' fields, some of which might also be 'required'.
-			if (@follows_fields) {
-				my %following;
-				my %found;
-				for my $i (0 .. $#$vals) {
-					if ($col_map{$i}) {
-						%following= ( $col_map{$i}->name => $col_map{$i} );
-					} else {
-						my $val= $vals->[$i];
-						my @match;
-						for my $f (@follows_fields) {
-							next unless grep $following{$_}, $f->follows_list;
-							push @match, $f if $val =~ $f->header_regex;
-						}
-						if (@match == 1) {
-							if ($found{$match[0]} && !$match[0]->array) {
-								$self->_write_log('error', 'Field %s matches multiple columns at %s', $match[0]->name, $iter->position);
-								next row;
-							}
-							$col_map{$i}= $match[0];
-							$found{$match[0]}= $i;
-							$following{$match[0]->name}= $match[0];
-						}
-						elsif (@match > 1) {
-							$self->_write_log('error', 'Field %s and %s both match at %s', $match[0]->name, $match[1]->name, $iter->position);
-							next row;
-						}
-						else {
-							%following= ();
-						}
-					}
-				}
-				# Check if any of the 'follows' fields were required
-				if (my @unfound= grep { !$found{$_} && $_->required } @follows_fields) {
-					$self->_write_log('debug', 'No match for required field %s at %s', $_->name, $iter->position)
-						for @unfound;
-				}
-			}
-			# Now, if there are any un-claimed columns, handle per 'on_unknown_columns' setting.
-			my @unclaimed= grep { !$col_map{$_} } 0 .. $#$vals;
-			if (@unclaimed) {
-				my $act= $self->on_unknown_columns;
-				my $unknown_list= join(', ', map $vals->[$_], @unclaimed);
-				$act= $act->($self, \@cols) if ref $act eq 'CODE';
-				if ($act eq 'use') {
-					$self->_write_log('warn', 'Ignoring unknown columns: %s', $unknown_list);
-				} elsif ($act eq 'next') {
-					$self->_write_log('warn', '%s would match except for unknown columns: %s',
-						$iter->position, $unknown_list);
-					next row;
-				} elsif ($act eq 'die') {
-					my $msg= "Header row includes unknown columns: $unknown_list";
-					$self->_write_log('error', $msg);
-					croak $msg;
-				} else {
-					croak "Invalid action '$act' for 'on_unknown_columns'";
-				}
-			}
-			@cols= map $col_map{$_}, 0 .. $#$vals;
-			last row;
-		}
+		my $cols= $self->static_field_order?
+			# If static field order, look for headers in sequence
+			$self->_match_headers_static($vals, $cache)
+			# else search for each header
+			: $self->_match_headers_dynamic($vals, $cache);
+		return $cols if $cols;
 	}
-	unless (@cols) {
-		$self->_write_log('warn', 'No row in dataset matched full header requirements');
+	$self->_write_log('warn', 'No row in dataset matched full header requirements');
+	return;
+}
+
+sub _match_headers_static {
+	my ($self, $header, $cache)= @_;
+	my $fields= $self->fields;
+	for my $i (0 .. $#$fields) {
+		next if $header->[$i] =~ $fields->[$i]->header_regex;
+		
+		# Field header doesn't match.  Start over on next row.
+		$self->_write_log_at_input('debug', 'Missing field %s', $fields->[$i]->name);
 		return;
 	}
-	return \@cols;
+	# found a match for every field!
+	return $fields;
+}
+
+sub _match_headers_dynamic {
+	my ($self, $header, $cache)= @_;
+	my %col_map;
+	my $fields= $self->fields;
+	my $free_fields=    $cache->{free_fields} || [
+		sort { $a->required? -1 : $b->required? 1 : 0 }	# Sort required first, to fail faster on non-matching rows
+		grep { !$_->follows_list } @$fields
+	];
+	my $follows_fields= $cache->{follows_fields} || [
+		grep { $_->follows_list } @$fields
+	];
+	for my $f (@$free_fields) {
+		my $hr= $f->header_regex;
+		my @found= grep { $header->[$_] =~ $hr } 0 .. $#$header;
+		if (@found == 1) {
+			if ($col_map{$found[0]}) {
+				$self->_write_log_at_input('warn', 'Field %s and %s both match', $f->name, $col_map{$found[0]}->name);
+				return;
+			}
+			$col_map{$found[0]}= $f;
+		}
+		elsif (@found > 1) {
+			if ($f->array) {
+				# Array columns may be found more than once
+				$col_map{$_}= $f for @found;
+			} else {
+				$self->_write_log_at_input('warn', 'Field %s matches more than one column', $f->name);
+				return;
+			}
+		}
+		elsif ($f->required) {
+			$self->_write_log_at_input('debug', 'No match for required field %s', $f->name);
+			return;
+		}
+		# else Not required, and not found
+	}
+	# Need to have found at least one column (even if none required)
+	unless (keys %col_map) {
+		$self->_write_log_at_input('debug', 'No fields matched');
+		return;
+	}
+	# Now, check for any of the 'follows' fields, some of which might also be 'required'.
+	if (@$follows_fields) {
+		my %following;
+		my %found;
+		for my $i (0 .. $#$header) {
+			if ($col_map{$i}) {
+				%following= ( $col_map{$i}->name => $col_map{$i} );
+			} else {
+				my $val= $header->[$i];
+				my @match;
+				for my $f (@$follows_fields) {
+					next unless grep $following{$_}, $f->follows_list;
+					push @match, $f if $val =~ $f->header_regex;
+				}
+				if (@match == 1) {
+					if ($found{$match[0]} && !$match[0]->array) {
+						$self->_write_log_at_input('error', 'Field %s matches multiple columns', $match[0]->name);
+						return;
+					}
+					$col_map{$i}= $match[0];
+					$found{$match[0]}= $i;
+					$following{$match[0]->name}= $match[0];
+				}
+				elsif (@match > 1) {
+					$self->_write_log_at_input('error', 'Field %s and %s both match', $match[0]->name, $match[1]->name);
+					return;
+				}
+				else {
+					%following= ();
+				}
+			}
+		}
+		# Check if any of the 'follows' fields were required
+		if (my @unfound= grep { !$found{$_} && $_->required } @$follows_fields) {
+			$self->_write_log_at_input('debug', 'No match for required field %s', $_->name)
+				for @unfound;
+		}
+	}
+	# Now, if there are any un-claimed columns, handle per 'on_unknown_columns' setting.
+	my @unclaimed= grep { !$col_map{$_} } 0 .. $#$header;
+	if (@unclaimed) {
+		my $act= $self->on_unknown_columns;
+		my $unknown_list= join(', ', map $header->[$_], @unclaimed);
+		$act= $act->($self, $header, \@unclaimed) if ref $act eq 'CODE';
+		if ($act eq 'use') {
+			$self->_write_log_at_input('warn', 'Ignoring unknown columns: %s', $unknown_list);
+		} elsif ($act eq 'next') {
+			$self->_write_log_at_input('warn', 'Would match except for unknown columns: %s', $unknown_list);
+			return;
+		} elsif ($act eq 'die') {
+			my $msg= "Header row includes unknown columns: $unknown_list";
+			$self->_write_log_at_input('error', $msg);
+			croak $msg;
+		} else {
+			croak "Invalid action '$act' for 'on_unknown_columns'";
+		}
+	}
+	return [ map $col_map{$_}, 0 .. $#$header ];
 }
 
 { package # Hide from CPAN
@@ -675,19 +705,19 @@ sub _find_table_in_current_dataset {
 	use warnings;
 	use parent 'Data::RecordExtractor::Iterator';
 	sub position {
-		shift->_fields->data_iter->position(@_);
+		shift->_fields->{data_iter}->position(@_);
 	}
 	sub progress {
-		shift->_fields->data_iter->progress(@_);
+		shift->_fields->{data_iter}->progress(@_);
 	}
 	sub tell {
-		shift->_fields->data_iter->tell(@_);
+		shift->_fields->{data_iter}->tell(@_);
 	}
 	sub seek {
-		shift->_fields->data_iter->seek(@_);
+		shift->_fields->{data_iter}->seek(@_);
 	}
 	sub next_dataset {
-		shift->_fields->data_iter->next_dataset(@_);
+		shift->_fields->{data_iter}->next_dataset(@_);
 	}
 }
 
