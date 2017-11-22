@@ -18,6 +18,14 @@ subtest header_regex => sub {
 		name => 'first_name', header => 'first_name',
 		match   => [ 'first_name', '  first_name', 'first_name#"$:^' ],
 		nomatch => [ 'first name', 'first.name', 'first _name', 'FirstName' ],
+	},{
+		name => 'zip5',
+		match => [ 'zip5', 'zip 5', 'zip_5', 'ZIP-5' ],
+		nomatch => [ 'zip' ],
+	},{
+		name => 'ZipCode',
+		match => [ 'ZipCode', 'zip code', 'zip.code', 'ZIP CODE', '--ZIP CODE--' ],
+		nomatch => [ 'ZipCode(5)' ],
 	});
 	plan tests => scalar @tests;
 	for my $t (@tests) {

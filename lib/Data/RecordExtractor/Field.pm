@@ -21,33 +21,34 @@ A string or regex describing the column header you want to find in the spreadshe
 If you specify a regex, it is used directly.  If you specify a string, it becomes the regex
 matching any string with the same words (\w+) and non-whitespace (\S+) characters in the same
 order, case insensitive, surrounded by any amount of non-alphanumeric garbage (C<[\W_]*>).
-The default (when no header is specified) is to use the L</name> as the string, but with C<"_">
-replaced by whitespace.
+When no header is specified, the L</name> is used as a string after first breaking it into
+words on underscore or camel-case or numeric boundaries.
 
 This deserves some examples:
 
-  Header                  Matches
-  "name"                  "Name", "name", "_Name_", " ( Name )"
-  "first_name"            "First_name", "First_Name", " first_name ? "
-  "first name"            "first name", "First_Name", "First,\tName"
-  "address:"              "ADDRESS:", "Address : ", "Address#$%^&*:/.,",
+  Name           Implied Default Header
+  "zipcode"      "zipcode"
+  "ZipCode"      "Zip Code"
+  "Zip_Code"     "zip Code"
+  "zip5"         "zip 5"
   
-  Name (default header)   Matches
-  "first_name"            "First Name", "first_name", "first____name"
+  Header         Regex                                  Could Match...
+  "ZipCode"      /^[\W_]*ZipCode[\W_]*$/i               "zipcode:"
+  "zip_code"     /^[\W_]*zip_code[\W_]*$/i              "--ZIP_CODE--"
+  "zip code"     /^[\W_]*zip[\W_]*code[\W_]*$/i         "ZIP\nCODE    "
+  "zip-code"     /^[\W_]*zip[\W_]*-[\W_]*code[\W_]*$/i  "ZIP-CODE:"
+  qr/Zip.*Code/  /Zip.*Code/                            "Post(Zip)Code"
 
 If this default matching doesn't meet your needs or paranoia level, then you should always
 specify your own header regexes.
 
-If you set the header to C<undef>, it means the column is not identified by a header and
-position must be determined by it's relation to other fields.
-
-(If your data actually doesn't have a header and you want to assume the columns match the
-fields, see extractor attribute L<Data::RecordExtractor/header_row_at>)
+(If your data actually doesn't have any header at all and you want to brazenly assume the
+columns match the fields, see extractor attribute L<Data::RecordExtractor/header_row_at>)
 
 =head2 required
 
 Whether or not this field must be found in order to detect a table.  Defaults to true.
-Note this does U<not> mean the cell of a row must contain data in order to read a record
+Note this does U<not> require the cell of a row to contain data in order to read a record
 from the table.
 
 =head2 trim
@@ -57,8 +58,8 @@ the field.
 
 =head2 blank
 
-The value to extract when the spreadsheet cell is empty.  (where "empty" depends on the value of
-C<trim>).  Default is C<undef>.  Another common value would be C<"">.
+The value to extract when the spreadsheet cell is empty.  (where "empty" depends on the value
+of C<trim>).  Default is C<undef>.  Another common value would be C<"">.
 
 =head2 type
 
@@ -77,7 +78,7 @@ still be an arrayref (of one element).
 
 Name (or arrayref of names) of a field which this field must follow, in a first-to-last
 ordering of the columns.  This field must occur immediately after the named field, or after
-another field which also C<follows> that named field.
+another field which also has a C<follows> restriction.
 
 The purpose of this attribute is to resolve ambiguous columns.  Suppose you expect columns with
 the following headers:
@@ -136,7 +137,10 @@ sub _build_header_regex {
 	my $h= $self->header;
 	unless (defined $h) {
 		$h= $self->name;
-		$h =~ s/_/ /g;
+		$h =~ s/([[:lower:]])([[:upper:]])/$1 $2/g; # split words on camelCase
+		$h =~ s/([[:alpha:]])([[:digit:]])/$1 $2/g; # or digit
+		$h =~ s/([[:digit:]])([[:alpha:]])/$1 $2/g;
+		$h =~ s/_/ /g;                              # then split on underscore
 	}
 	return $h if ref($h) eq 'Regexp';
 	my $pattern= join "[\\W_]*", map "\Q$_\E", grep { defined && length }
