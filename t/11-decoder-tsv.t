@@ -11,7 +11,7 @@ a	b	c	d
 END
 open my $input_fh, '<', \$input or die;
 my $d= new_ok( 'Data::RecordExtractor::Decoder::TSV',
-	[ file_name => '', file_handle => $input_fh, logger => sub {} ],
+	[ file_name => '', file_handle => $input_fh, log => sub {} ],
 	'TSV decoder' );
 
 ok( my $iter= $d->iterator, 'got iterator' );

@@ -20,12 +20,12 @@ Set by RecordExtractor.  Useful for logging.
 
 Set by RecordExtractor.  This is what the iterator should parse.
 
-=head2 logger
+=head2 log
 
 Set by RecordExtractor.  Unlike the attribute of the same name on
 RecordExtractor, this is always a coderef, to be called as:
 
-  $logger->($level, $message);
+  $log->($level, $message);
 
 =head2 iterator
 
@@ -44,7 +44,7 @@ a list of columns to retrieve, rather than retrieving the full row.
 
 has file_name   => ( is => 'ro', required => 1 );
 has file_handle => ( is => 'ro', required => 1 );
-has logger      => ( is => 'ro', required => 1 );
+has log         => ( is => 'ro', required => 1 );
 has iterator    => ( is => 'lazy' );
 
 1;

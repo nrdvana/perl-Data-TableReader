@@ -7,7 +7,7 @@ use File::Spec::Functions 'catfile';
 subtest XLS => sub {
 	use_ok( 'Data::RecordExtractor::Decoder::XLS' ) or die;
 	my $xls= new_ok( 'Data::RecordExtractor::Decoder::XLS',
-		[ file_name => '', file_handle => open_data('AddressAuxData.xls'), logger => sub {} ],
+		[ file_name => '', file_handle => open_data('AddressAuxData.xls'), log => sub {} ],
 		'XLS decoder' );
 	run_test($xls);
 };
@@ -15,7 +15,7 @@ subtest XLS => sub {
 subtest XLSX => sub {
 	use_ok( 'Data::RecordExtractor::Decoder::XLSX' ) or BAIL_OUT;
 	my $xlsx= new_ok( 'Data::RecordExtractor::Decoder::XLSX',
-		[ file_name => '', file_handle => open_data('AddressAuxData.xlsx'), logger => sub {} ],
+		[ file_name => '', file_handle => open_data('AddressAuxData.xlsx'), log => sub {} ],
 		'XLSX decoder' );
 	run_test($xlsx);
 };
