@@ -89,6 +89,65 @@ subtest multiline_header => sub {
 	is_deeply( $ex->iterator->all(), [{a=>'A',b=>'B',c=>'C'}], 'found row' );
 };
 
+subtest multi_column => sub {
+	open(my $csv, '<', \"a,b,a,c,a,d\n1,2,3,4,5,6\n") or die;
+	my $ex= new_ok( 'Data::RecordExtractor', [
+			input => $csv,
+			fields => [
+				{ name => 'a', header => qr/a|c/, array => 1 },
+				{ name => 'd' },
+			],
+			log => $log,
+		], 'Record Extractor' );
+	ok( $ex->find_table, 'found table' );
+	is_deeply( $ex->field_map, { a => [0,2,3,4], d => 5 }, 'field_map' );
+	is_deeply( $ex->iterator->all(), [{a => [1,3,4,5], d => 6}], 'rows' );
+};
+
+subtest array_at_end => sub {
+	open(my $csv, '<', \"a,b,c,,,,,\n1,2,3,4,5,6,7,8,9\n1,2,3,4,5,6,7,8,9,10,11,12,13\n1,2,3,4") or die;
+	my $ex= new_ok( 'Data::RecordExtractor', [
+			input => $csv,
+			fields => [
+				'a',
+				{ name => 'c', array => 1 },
+				{ name => 'c', array => 1, header => '', follows => 'c' },
+			],
+			log => $log,
+		], 'Record Extractor' );
+	ok( $ex->find_table, 'found table' );
+	is_deeply( $ex->field_map, { a => 0, c => [2,3,4,5,6,7] }, 'field_map' );
+	my $i= $ex->iterator;
+	is_deeply( $i->(), { a => 1, c => [3,4,5,6,7,8] }, 'row1' );
+	is_deeply( $i->(), { a => 1, c => [3,4,5,6,7,8] }, 'row1' );
+	is_deeply( $i->(), { a => 1, c => [3,4,undef,undef,undef,undef] }, 'row1' );
+	is( $i->(), undef, 'eof' );
+};
+
+subtest complex_follows => sub {
+	open(my $csv, '<', \(
+		 "name,start coords,,,,end coords,,,,\n"
+		."    ,x,y,w,h,x,y,w,h\n"
+		."foo,1,1,6,6,2,2,8,8\n"
+	)) or die;
+	my $ex= new_ok( 'Data::RecordExtractor', [
+			input => $csv,
+			fields => [
+				'name',
+				{ name => 'start_x', header => qr/start.*\nx/ },
+				{ name => 'start_y', header => 'y', follows => 'start_x' },
+				{ name => 'end_x', header => qr/end.*\nx/ },
+				{ name => 'end_y', header => 'y', follows => 'end_x' }
+			],
+			log => $log,
+		], 'Record Extractor' );
+	ok( $ex->find_table, 'found table' );
+	is_deeply( $ex->field_map, { name => 0, start_x => 1, start_y => 2, end_x => 5, end_y => 6 }, 'field_map' );
+	my $i= $ex->iterator;
+	is_deeply( $i->(), { name => 'foo', start_x => 1, start_y => 1, end_x => 2, end_y => 2 }, 'row1' );
+	is( $i->(), undef, 'eof' );
+};
+
 done_testing;
 
 sub open_data {
