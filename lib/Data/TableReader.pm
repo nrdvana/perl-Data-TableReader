@@ -187,12 +187,20 @@ The default is C<'next'>.
   on_validation_fail => 'use'   # warn, and then use the record anyway
   on_validation_fail => 'die'   # fatal error
   on_validation_fail => sub {
-    my ($reader, $record, $failed_fields)= @_;
-    for my $field (@$failed_fields) {
-      if ($record->{ $field->name } ...) {
-        ...
-      }
+    my ($reader, $failures, $values, $context)= @_;
+    for (@$failures) {
+      my ($field, $value_index, $message)= @$_;
+      ...
+      # $field is a Data::TableReader::Field
+      # $values->[$value_index] is the string that failed validation
+      # $message is the error returned from the validation function
+      # $context is a string describing the source of the row, like "Row 5"
+      # You may modify $values to alter the record that is about to be created
     }
+    # Clear the failures array to suppress warnings, if you actually corrected
+    # the validation problems.
+    @$failures= () if $opt eq 'use';
+    # return one of the above constants to tell the iterator what to do next
     return $opt;
   }
 
@@ -677,6 +685,20 @@ sub iterator {
 	return $i;
 }
 
+sub _make_validation_callback {
+	my ($self, $field, $index)= @_;
+	my $t= $field->type;
+	ref $t eq 'CODE'? sub {
+		my $e= $t->($_[0][$index]);
+		defined $e? ([ $field, $index, $e ]) : ()
+	}
+	: $t->can('validate')? sub {
+		my $e= $t->validate($_[0][$index]);
+		defined $e? ([ $field, $index, $e ]) : ()
+	}
+	: croak "Invalid type constraint $t on field ".$field->name;
+}
+
 sub _build_iterator {
 	my $self= shift;
 	my $fields= $self->fields;
@@ -688,6 +710,7 @@ sub _build_iterator {
 	my @field_names; # ordered list of field names where row slice should be assigned
 	my @trim_idx;  # list of array indicies which should be whitespace-trimmed.
 	my @blank_val; # blank value per each fetched column
+	my @type_check;# list of 
 	my $class;     # optional object class for the resulting rows
 
 	# If result is array, the slice of the row must match the position of the fields in the
@@ -715,6 +738,8 @@ sub _build_iterator {
 			my $field= $col_map->[$row_slice[$_]];
 			push @trim_idx, $_ if $field->trim;
 			push @blank_val, $field->blank;
+			push @type_check, $self->_make_validation_callback($field, $_)
+				if $field->type;
 		}
 		else {
 			# This field is an array-value, so add the src columns to @row_slice
@@ -728,6 +753,8 @@ sub _build_iterator {
 				my $field= $col_map->[$row_slice[$_]];
 				push @trim_idx, $_ if $field->trim;
 				push @blank_val, $field->blank;
+				push @type_check, $self->_make_validation_callback($field, $_)
+					if $field->type;
 			}
 		}
 	}
@@ -757,6 +784,13 @@ sub _build_iterator {
 				return undef;
 			}
 			$first_blank= undef;
+		}
+		# Check type constraints, if any
+		if (@type_check) {
+			if (my @failed= map $_->($row), @type_check) {
+				$self->_handle_validation_fail(\@failed, $row, $data_iter->position.': ')
+					or goto again;
+			}
 		}
 		# Collect all the array-valued fields from the tail of the row
 		$row->[$_->[0]]= [ splice @$row, $_->[1], $_->[2] ] for @arrayvals;
@@ -792,6 +826,27 @@ sub _handle_blank_row {
 		croak $msg;
 	}
 	croak "Invalid value for 'on_blank_row': \"$act\"";
+}
+
+sub _handle_validation_fail {
+	my ($self, $failures, $values, $context)= @_;
+	my $act= $self->on_validation_fail;
+	$act= $act->($self, $failures, $values, $context)
+		if ref $act eq 'CODE';
+	my $errors= join(', ', map $_->[0]->name.': '.$_->[2], @$failures);
+	if ($act eq 'next') {
+		$self->_log->('warn', "%sSkipped for data errors: %s", $context, $errors) if $errors;
+		return 0;
+	}
+	if ($act eq 'use') {
+		$self->_log->('warn', "%sPossible data errors: %s", $context, $errors) if $errors;
+		return 1;
+	}
+	if ($act eq 'die') {
+		my $msg= "${context}Invalid record: $errors";
+		$self->_log->('error', $msg);
+		croak $msg;
+	}
 }
 
 BEGIN { @Data::TableReader::_RecIter::ISA= ( 'Data::TableReader::Iterator' ) }

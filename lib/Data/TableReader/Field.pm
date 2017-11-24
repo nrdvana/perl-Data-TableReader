@@ -63,10 +63,18 @@ of C<trim>).  Default is C<undef>.  Another common value would be C<"">.
 
 =head2 type
 
-A L<Type::Tiny> type (or any object or class with a C<check> method) or a coderef which will
-validate each value pulled from a cell for this field.  This is optional and there is no
-default.  The behavior of a validation failure depends on the options to TableReader when
-creating an iterator.
+A L<Type::Tiny> type (or any object or class with a C<validate> method) or a coderef which
+returns a validation error message (undef if it is valid).
+
+  use Types::Standard;
+  ...
+     type => Maybe[Int]
+  
+  # or without Type::Tiny
+     type => sub { $_[0] =~ /^\w+/? undef : "word-characters only" },
+
+This is optional and there is no default.
+The behavior of a validation failure depends on the options to TableReader.
 
 =head2 array
 
@@ -119,7 +127,7 @@ has header   => ( is => 'ro' );
 has required => ( is => 'ro', default => sub { 1 } );
 has trim     => ( is => 'ro', default => sub { 1 } );
 has blank    => ( is => 'ro' ); # default is undef
-has type     => ( is => 'ro', isa => sub { $_[0]->can('check') }, required => 0 );
+has type     => ( is => 'ro', isa => sub { ref $_[0] eq 'CODE' or $_[0]->can('validate') } );
 has array    => ( is => 'ro' );
 has follows  => ( is => 'ro' );
 sub follows_list { my $f= shift->follows; ref $f? @$f : defined $f? ( $f ) : () }

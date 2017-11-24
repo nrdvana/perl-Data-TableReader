@@ -10,7 +10,7 @@ use_ok( 'Data::TableReader' ) or BAIL_OUT;
 subtest iterator_weakref => sub {
 	open(my $csv, '<', \"a,b,c\n1,2,3\n") or die;
 	my $re= new_ok( 'Data::TableReader',
-		[ input => $csv, format => 'CSV', fields => ['a','b','c'], log => $log ],
+		[ input => $csv, decoder => 'CSV', fields => ['a','b','c'], log => $log ],
 		'TableReader'
 	);
 	ok( $re->find_table, 'find_table' ) or die "Can't continue without table";
@@ -19,7 +19,6 @@ subtest iterator_weakref => sub {
 	undef $i;
 	is( $re->_iterator, undef, 'iterator was garbage collected' );
 	ok( my $i2= $re->iterator, 'second interator' );
-	isnt( "$i2", $i_name, 'not same iterator' );
 	is_deeply( $i2->all, [ { a => 1, b => 2, c => 3 } ], 'read rows' );
 };
 
