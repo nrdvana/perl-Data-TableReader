@@ -5,13 +5,13 @@ they match your expected schema, and then iterate the records.
 
 You can install the latest stable release of this module from CPAN:
 
-  cpanm Data::TableIterator
+    cpanm Data::TableIterator
 
 or build and install this source code with the Dist::Zilla tool:
 
-  dzil build
-  cpanm ./Data-TableIterator-$VERSION
+    dzil build
+    cpanm ./Data-TableIterator-$VERSION
 
 The source is found at
 
-  http://github.com/nrdvana/perl-Data-TableReader
+    http://github.com/nrdvana/perl-Data-TableReader
