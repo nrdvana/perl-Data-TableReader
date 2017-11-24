@@ -14,7 +14,7 @@ sub default_xlsx_module {
 	};
 }
 
-# ABSTRACT: Access sheets/rows of a modern XML-based Microsoft Excel spreadsheet
+# ABSTRACT: Access sheets/rows of a modern Microsoft Excel workbook
 
 =head1 DESCRIPTION
 

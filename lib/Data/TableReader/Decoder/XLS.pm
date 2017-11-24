@@ -13,7 +13,7 @@ sub default_xls_module {
 	};
 }
 
-# ABSTRACT: Access sheets/rows of a Microsoft Excel '97 spreadsheet
+# ABSTRACT: Access sheets/rows of a Microsoft Excel '97 workbook
 
 =head1 DESCRIPTION
 
