@@ -759,6 +759,7 @@ sub _build_iterator {
 		}
 	}
 	@arrayvals= reverse @arrayvals;
+	my @filters= @{ $self->filters || [] };
 	my ($n_blank, $first_blank, $eof);
 	my $sub= sub {
 		again:
@@ -795,10 +796,15 @@ sub _build_iterator {
 		# Collect all the array-valued fields from the tail of the row
 		$row->[$_->[0]]= [ splice @$row, $_->[1], $_->[2] ] for @arrayvals;
 		# stop here if the return class is 'ARRAY'
-		return $row unless @field_names;
+		unless (@field_names) {
+			$_->($row) for @filters;
+			return $row;
+		}
 		# Convert the row to a hashref
 		my %rec;
 		@rec{@field_names}= @$row;
+		# Apply any filters
+		$_->(\%rec) for @filters;
 		# Construct a class, if requested, else return hashref
 		return $class? $class->new(\%rec) : \%rec;
 	};

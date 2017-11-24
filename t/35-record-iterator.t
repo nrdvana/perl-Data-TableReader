@@ -22,4 +22,19 @@ subtest iterator_weakref => sub {
 	is_deeply( $i2->all, [ { a => 1, b => 2, c => 3 } ], 'read rows' );
 };
 
+subtest filters => sub {
+	open(my $csv, '<', \"a,b,c\n1,2,3\n") or die;
+	my $tr= new_ok( 'Data::TableReader',
+		[ input => $csv, decoder => 'CSV', fields => ['a','b','c'],
+			filters => [
+				sub { $_[0]{c}= sprintf('%05d', $_[0]{c}); }
+			],
+			log => $log
+		],
+		'TableReader'
+	);
+	ok( my $i= $tr->iterator, 'interator' );
+	is_deeply( $i->all, [ { a => 1, b => 2, c => '00003' } ], 'read rows' );
+};
+
 done_testing;
