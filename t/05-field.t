@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Test::More;
 
-use_ok( 'Data::RecordExtractor::Field' ) or BAIL_OUT;
+use_ok( 'Data::TableReader::Field' ) or BAIL_OUT;
 
 subtest header_regex => sub {
 	my @tests= ({
@@ -31,7 +31,7 @@ subtest header_regex => sub {
 	for my $t (@tests) {
 		subtest "name=$t->{name} header=".($t->{header}||'') => sub {
 			plan tests => 1 + @{$t->{match}} + @{$t->{nomatch}};
-			my $field= new_ok( 'Data::RecordExtractor::Field',
+			my $field= new_ok( 'Data::TableReader::Field',
 				[ name => $t->{name}, header => $t->{header} ], 'field' );
 			like( $_, $field->header_regex, "match $_" ) for @{ $t->{match} };
 			unlike( $_, $field->header_regex, "nomatch $_" ) for @{ $t->{nomatch} };

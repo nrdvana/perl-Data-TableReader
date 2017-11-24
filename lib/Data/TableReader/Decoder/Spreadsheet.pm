@@ -1,10 +1,10 @@
-package Data::RecordExtractor::Decoder::Spreadsheet;
+package Data::TableReader::Decoder::Spreadsheet;
 
 use Moo 2;
 use Carp 'croak';
 use IO::Handle;
 
-extends 'Data::RecordExtractor::Decoder';
+extends 'Data::TableReader::Decoder';
 
 =head1 DESCRIPTION
 
@@ -13,7 +13,7 @@ compatible with L<Spreadsheet::ParseExcel>.
 
 =head1 ATTRIBUTES
 
-See attributes from parent class: L<Data::RecordExtractor::Decoder>.
+See attributes from parent class: L<Data::TableReader::Decoder>.
 
 =head2 C<workbook>
 
@@ -70,7 +70,7 @@ sub _build_iterator {
 	my ($colmin, $colmax)= $sheet? $sheet->col_range() : (0,-1);
 	my ($rowmin, $rowmax)= $sheet? $sheet->row_range() : (0,-1);
 	my $row= $rowmin-1;
-	Data::RecordExtractor::Decoder::Spreadsheet::_Iterator->new(
+	Data::TableReader::Decoder::Spreadsheet::_Iterator->new(
 		sub {
 			my $slice= shift;
 			return undef unless $row < $rowmax;
@@ -101,11 +101,11 @@ sub _build_iterator {
 }
 
 { package # Hide from CPAN
-	Data::RecordExtractor::Decoder::Spreadsheet::_Iterator;
+	Data::TableReader::Decoder::Spreadsheet::_Iterator;
 	use strict;
 	use warnings;
 	use Carp;
-	use parent 'Data::RecordExtractor::Iterator';
+	use parent 'Data::TableReader::Iterator';
 
 	sub position {
 		my $f= shift->_fields;

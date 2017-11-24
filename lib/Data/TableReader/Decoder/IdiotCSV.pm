@@ -1,11 +1,11 @@
-package Data::RecordExtractor::Decoder::IdiotCSV;
+package Data::TableReader::Decoder::IdiotCSV;
 
 use Moo 2;
 use Try::Tiny;
 use Carp;
 use Log::Any '$log';
 
-extends 'Data::RecordExtractor::Decoder::CSV';
+extends 'Data::TableReader::Decoder::CSV';
 
 =head1 DESCRIPTION
 
@@ -30,14 +30,14 @@ configuration:
     escape_char => undef,
   }
 
-And so this module is simply a subclass of L<Data::RecordExtractor::Decoder::CSV>
+And so this module is simply a subclass of L<Data::TableReader::Decoder::CSV>
 which provides those defaults to the parser.
 
 =cut
 
 sub _build_parser {
 	my $args= shift->_parser_args || {};
-	Data::RecordExtractor::Decoder::CSV->_csv_class->new({
+	Data::TableReader::Decoder::CSV->_csv_class->new({
 		binary => 1,
 		allow_loose_quotes => 1,
 		allow_whitespace => 1,

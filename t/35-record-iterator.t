@@ -5,13 +5,13 @@ use Test::More;
 use Log::Any '$log';
 use Log::Any::Adapter 'TAP';
 
-use_ok( 'Data::RecordExtractor' ) or BAIL_OUT;
+use_ok( 'Data::TableReader' ) or BAIL_OUT;
 
 subtest iterator_weakref => sub {
 	open(my $csv, '<', \"a,b,c\n1,2,3\n") or die;
-	my $re= new_ok( 'Data::RecordExtractor',
+	my $re= new_ok( 'Data::TableReader',
 		[ input => $csv, format => 'CSV', fields => ['a','b','c'], log => $log ],
-		'Record Extractor'
+		'TableReader'
 	);
 	ok( $re->find_table, 'find_table' ) or die "Can't continue without table";
 	ok( my $i= $re->iterator, 'create iterator' );

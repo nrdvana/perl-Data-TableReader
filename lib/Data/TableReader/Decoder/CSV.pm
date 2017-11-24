@@ -1,9 +1,9 @@
-package Data::RecordExtractor::Decoder::CSV;
+package Data::TableReader::Decoder::CSV;
 
 use Moo 2;
 use Try::Tiny;
 use Carp;
-extends 'Data::RecordExtractor::Decoder';
+extends 'Data::TableReader::Decoder';
 
 our $_csv_class;
 sub _csv_class {
@@ -59,7 +59,7 @@ sub _build_iterator {
 	my $parser= $self->parser;
 	my $row= 0;
 	my $fh= $self->file_handle;
-	Data::RecordExtractor::Decoder::CSV::Iterator->new(
+	Data::TableReader::Decoder::CSV::Iterator->new(
 		sub {
 			++$row;
 			my $r= $parser->getline($fh) or return undef;
@@ -75,11 +75,11 @@ sub _build_iterator {
 }
 
 { package # Hide from CPAN
-	Data::RecordExtractor::Decoder::CSV::Iterator;
+	Data::TableReader::Decoder::CSV::Iterator;
 	use strict;
 	use warnings;
 	use Carp;
-	use parent 'Data::RecordExtractor::Iterator';
+	use parent 'Data::TableReader::Iterator';
 
 	sub position {
 		my $f= shift->_fields;

@@ -1,4 +1,4 @@
-package Data::RecordExtractor::Decoder;
+package Data::TableReader::Decoder;
 
 use Moo 2;
 
@@ -14,16 +14,16 @@ tags) then the decode should also support the "next_dataset" method.
 
 =head2 filename
 
-Set by RecordExtractor.  Useful for logging.
+Set by TableReader.  Useful for logging.
 
 =head2 file_handle
 
-Set by RecordExtractor.  This is what the iterator should parse.
+Set by TableReader.  This is what the iterator should parse.
 
 =head2 log
 
-Set by RecordExtractor.  Unlike the attribute of the same name on
-RecordExtractor, this is always a coderef, to be called as:
+Set by TableReader.  Unlike the attribute of the same name on
+TableReader, this is always a coderef, to be called as:
 
   $log->($level, $message);
 
@@ -36,7 +36,7 @@ This lazy-builds the iterator from L</_build_iterator>
 =head2 _build_iterator
 
 This must be implemented by the subclass, to return an instance of
-L<Data::RecordExtractor::Iterator>.  The iterator should return an arrayref
+L<Data::TableReader::Iterator>.  The iterator should return an arrayref
 each time it is called.  The iterator may also accept a single argument of
 a list of columns to retrieve, rather than retrieving the full row.
 

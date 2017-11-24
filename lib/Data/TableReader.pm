@@ -1,4 +1,4 @@
-package Data::RecordExtractor;
+package Data::TableReader;
 
 use Moo 2;
 use Try::Tiny;
@@ -6,13 +6,13 @@ use URI;
 use Carp;
 use List::Util 'max';
 use Module::Runtime 'require_module';
-use Data::RecordExtractor::Field;
+use Data::TableReader::Field;
 
 # ABSTRACT: Extract records from "dirty" tabular data sources
 
 =head1 SYNOPSIS
 
-  my $ex= Data::RecordExtractor->new(
+  my $ex= Data::TableReader->new(
     # path or file handle
     # let it auto-detect the format (but can override that if we need)
     input => 'path/to/file.csv',
@@ -67,24 +67,24 @@ may specify the decoder directly to avoid auto-detection.
 
 =head2 decoder
 
-This is either an instance of L<Data::RecordExtractor::Decoder>, or a class name,
-or a partial class name to be appended as C<"Data::RecordExtractor::Decoder::$name">
+This is either an instance of L<Data::TableReader::Decoder>, or a class name,
+or a partial class name to be appended as C<"Data::TableReader::Decoder::$name">
 or an arrayref or hashref of arguments to build the decoder.
 
 Examples:
 
   'CSV'
-  # becomes Data::RecordExtractor::Decoder::CSV->new()
+  # becomes Data::TableReader::Decoder::CSV->new()
   
   [ 'CSV', sep_char => "|" ]
-  # becomes Data::RecordExtractor::Decoder::CSV->new(sep_char => "|")
+  # becomes Data::TableReader::Decoder::CSV->new(sep_char => "|")
   
   { CLASS => 'CSV', sep_char => "|" }
-  # becomes Data::RecordExtractor::Decoder::CSV->new({ sep_char => "|" })
+  # becomes Data::TableReader::Decoder::CSV->new({ sep_char => "|" })
 
 =head2 fields
 
-An arrayref of L<Data::RecordExtractor::Field> objects (or hashrefs to
+An arrayref of L<Data::TableReader::Field> objects (or hashrefs to
 construct them with) which this module should search for within the tables
 (worksheets etc.) of L</input>.
 
@@ -123,7 +123,7 @@ to undef if you also set C<< static_field_order => 1 >>.
   on_unknown_columns => 'next' # warn, and then look for another table which matches
   on_unknown_columns => 'die'  # fatal error
   on_unknown_columns => sub {
-    my ($extractor, $col_headers)= @_;
+    my ($reader, $col_headers)= @_;
     ...;
     return $opt; # one of the above values
   }
@@ -166,7 +166,7 @@ If you want to get cleaner default log messages, i.e. to show to users, see L</l
   on_blank_rows => 'die'  # fatal error
   on_blank_rows => 'use'  # actually try to return the blank rows as records
   on_blank_rows => sub {
-    my ($extractor, $first_blank_rownum, $last_blank_rownum)= @_;
+    my ($reader, $first_blank_rownum, $last_blank_rownum)= @_;
     ...;
     return $opt; # one of the above values
   }
@@ -186,7 +186,7 @@ The default is C<'next'>.
   on_validation_fail => 'use'   # warn, and then use the record anyway
   on_validation_fail => 'die'   # fatal error
   on_validation_fail => sub {
-    my ($extractor, $record, $failed_fields)= @_;
+    my ($reader, $record, $failed_fields)= @_;
     for my $field (@$failed_fields) {
       if ($record->{ $field->name } ...) {
         ...
@@ -281,7 +281,7 @@ sub _build_decoder {
 	else {
 		croak "Can't create decoder from ".ref($decoder_arg);
 	}
-	$class= "Data::RecordExtractor::Decoder::$class"
+	$class= "Data::TableReader::Decoder::$class"
 		unless $class =~ /::/;
 	require_module($class) or croak "$class does not exist or is not installed";
 	return $class->new(
@@ -298,12 +298,12 @@ sub _coerce_field_list {
 	my @list= @$list; # clone it, to make sure we don't unexpectedly alter the caller's data
 	for (@list) {
 		if (!ref $_) {
-			$_= Data::RecordExtractor::Field->new({ name => $_ });
+			$_= Data::TableReader::Field->new({ name => $_ });
 		} elsif (ref $_ eq 'HASH') {
 			my %args= %$_;
 			# "isa" alias for the 'type' attribute
 			$args{type}= delete $args{isa} if defined $args{isa} && !defined $args{type};
-			$_= Data::RecordExtractor::Field->new(\%args)
+			$_= Data::TableReader::Field->new(\%args)
 		} else {
 			croak "Can't coerce '$_' to a Field object"
 		}
@@ -767,8 +767,8 @@ sub _build_iterator {
 		# Construct a class, if requested, else return hashref
 		return $class? $class->new(\%rec) : \%rec;
 	};
-	return Data::RecordExtractor::_RecordIterator->new(
-		$sub, { data_iter => $data_iter, extractor => $self },
+	return Data::TableReader::_RecordIterator->new(
+		$sub, { data_iter => $data_iter, reader => $self },
 	);
 }
 
@@ -794,10 +794,10 @@ sub _handle_blank_row {
 }
 
 { package # Hide from CPAN
-	Data::RecordExtractor::_RecordIterator;
+	Data::TableReader::_RecordIterator;
 	use strict;
 	use warnings;
-	use parent 'Data::RecordExtractor::Iterator';
+	use parent 'Data::TableReader::Iterator';
 	sub all {
 		my $self= shift;
 		my (@rec, $x);
@@ -817,7 +817,7 @@ sub _handle_blank_row {
 		shift->_fields->{data_iter}->seek(@_);
 	}
 	sub next_dataset {
-		shift->_fields->{extractor}->_log
+		shift->_fields->{reader}->_log
 			->('warn',"Searching for supsequent table headers is not supported yet");
 		return 0;
 	}

@@ -1,12 +1,12 @@
-package Data::RecordExtractor::Decoder::XLS;
+package Data::TableReader::Decoder::XLS;
 
 use Moo 2;
 use Carp;
-extends 'Data::RecordExtractor::Decoder::Spreadsheet';
+extends 'Data::TableReader::Decoder::Spreadsheet';
 
 =head1 DESCRIPTION
 
-See L<Data::RecordExtractor::Decoder::Spreadsheet>.
+See L<Data::TableReader::Decoder::Spreadsheet>.
 This subclass simply initializes the parser with an instance of
 L<Spreadsheet::ParseExcel>.
 

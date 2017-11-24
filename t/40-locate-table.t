@@ -6,12 +6,12 @@ use File::Spec::Functions 'catfile';
 use Log::Any '$log';
 use Log::Any::Adapter 'TAP';
 
-use_ok( 'Data::RecordExtractor::Field' ) or BAIL_OUT;
-use_ok( 'Data::RecordExtractor' ) or BAIL_OUT;
+use_ok( 'Data::TableReader::Field' ) or BAIL_OUT;
+use_ok( 'Data::TableReader' ) or BAIL_OUT;
 
 # Find fields in the exact order they are present in the file
 subtest basic => sub {
-	my $ex= new_ok( 'Data::RecordExtractor', [
+	my $ex= new_ok( 'Data::TableReader', [
 			input => open_data('AddressAuxData.xlsx'),
 			fields => [
 				{ name => 'name' },
@@ -21,9 +21,9 @@ subtest basic => sub {
 				{ name => 'zip' },
 			],
 			log => $log,
-		], 'Record extractor' );
-	isa_ok( $ex->decoder, 'Data::RecordExtractor::Decoder::XLSX', 'detected format' );
-	isa_ok( $ex->fields->[3], 'Data::RecordExtractor::Field', 'coerced fields list' );
+		], 'TableReader' );
+	isa_ok( $ex->decoder, 'Data::TableReader::Decoder::XLSX', 'detected format' );
+	isa_ok( $ex->fields->[3], 'Data::TableReader::Field', 'coerced fields list' );
 	ok( $ex->find_table, 'found table' );
 	is_deeply( $ex->col_map, $ex->fields, 'col map' );
 	is_deeply( $ex->field_map, { name => 0, address => 1, city => 2, state => 3, zip => 4 }, 'field map' );
@@ -34,7 +34,7 @@ subtest basic => sub {
 };
 
 subtest find_on_second_sheet => sub {
-	my $ex= new_ok( 'Data::RecordExtractor', [
+	my $ex= new_ok( 'Data::TableReader', [
 			input => open_data('AddressAuxData.xlsx'),
 			fields => [
 				{ name => 'postcode' },
@@ -42,7 +42,7 @@ subtest find_on_second_sheet => sub {
 				{ name => 'state' },
 			],
 			log => $log,
-		], 'Record extractor' );
+		], 'TableReader' );
 	ok( $ex->find_table, 'found table' );
 	ok( my $i= $ex->iterator, 'iterator' );
 	is_deeply( $i->(), { state => 'Alberta', postcode => 'AB', country => 'CA' }, 'row 1' );
@@ -55,7 +55,7 @@ subtest find_on_second_sheet => sub {
 
 subtest find_required => sub {
 	open(my $csv, '<', \"q,w,e,r,t,y\nq,w,e,r,t,a,s,d\n") or die;
-	my $ex= new_ok( 'Data::RecordExtractor', [
+	my $ex= new_ok( 'Data::TableReader', [
 			input => $csv,
 			fields => [
 				{ name => 'q', required => 1 },
@@ -66,7 +66,7 @@ subtest find_required => sub {
 				{ name => 's', required => 1 },
 			],
 			log => $log,
-		], 'Record extractor' );
+		], 'TableReader' );
 	ok( $ex->find_table, 'found table' );
 	is_deeply( $ex->field_map, { q => 0, w => 1, a => 5, s => 6 }, 'field_map' );
 	is_deeply( $ex->iterator->all(), [], 'immediate eof' );
@@ -74,7 +74,7 @@ subtest find_required => sub {
 
 subtest multiline_header => sub {
 	open(my $csv, '<', \"a,b,c\nd,e,f\ng,b,c\nA,B,C") or die;
-	my $ex= new_ok( 'Data::RecordExtractor', [
+	my $ex= new_ok( 'Data::TableReader', [
 			input => $csv,
 			fields => [
 				{ name => 'a', header => "d g" },
@@ -82,7 +82,7 @@ subtest multiline_header => sub {
 				{ name => 'c', header => qr/^f\nc$/ },
 			],
 			log => $log,
-		], 'Record extractor' );
+		], 'TableReader' );
 	is( $ex->header_row_combine, 2, 'header_row_combine' );
 	ok( $ex->find_table, 'found table' );
 	is_deeply( $ex->field_map, { a => 0, b => 1, c => 2 }, 'field_map' );
@@ -91,14 +91,14 @@ subtest multiline_header => sub {
 
 subtest multi_column => sub {
 	open(my $csv, '<', \"a,b,a,c,a,d\n1,2,3,4,5,6\n") or die;
-	my $ex= new_ok( 'Data::RecordExtractor', [
+	my $ex= new_ok( 'Data::TableReader', [
 			input => $csv,
 			fields => [
 				{ name => 'a', header => qr/a|c/, array => 1 },
 				{ name => 'd' },
 			],
 			log => $log,
-		], 'Record Extractor' );
+		], 'TableReader' );
 	ok( $ex->find_table, 'found table' );
 	is_deeply( $ex->field_map, { a => [0,2,3,4], d => 5 }, 'field_map' );
 	is_deeply( $ex->iterator->all(), [{a => [1,3,4,5], d => 6}], 'rows' );
@@ -106,7 +106,7 @@ subtest multi_column => sub {
 
 subtest array_at_end => sub {
 	open(my $csv, '<', \"a,b,c,,,,,\n1,2,3,4,5,6,7,8,9\n1,2,3,4,5,6,7,8,9,10,11,12,13\n1,2,3,4") or die;
-	my $ex= new_ok( 'Data::RecordExtractor', [
+	my $ex= new_ok( 'Data::TableReader', [
 			input => $csv,
 			fields => [
 				'a',
@@ -114,7 +114,7 @@ subtest array_at_end => sub {
 				{ name => 'c', array => 1, header => '', follows => 'c' },
 			],
 			log => $log,
-		], 'Record Extractor' );
+		], 'TableReader' );
 	ok( $ex->find_table, 'found table' );
 	is_deeply( $ex->field_map, { a => 0, c => [2,3,4,5,6,7] }, 'field_map' );
 	my $i= $ex->iterator;
@@ -130,7 +130,7 @@ subtest complex_follows => sub {
 		."    ,x,y,w,h,x,y,w,h\n"
 		."foo,1,1,6,6,2,2,8,8\n"
 	)) or die;
-	my $ex= new_ok( 'Data::RecordExtractor', [
+	my $ex= new_ok( 'Data::TableReader', [
 			input => $csv,
 			fields => [
 				'name',
@@ -140,7 +140,7 @@ subtest complex_follows => sub {
 				{ name => 'end_y', header => 'y', follows => 'end_x' }
 			],
 			log => $log,
-		], 'Record Extractor' );
+		], 'TableReader' );
 	ok( $ex->find_table, 'found table' );
 	is_deeply( $ex->field_map, { name => 0, start_x => 1, start_y => 2, end_x => 5, end_y => 6 }, 'field_map' );
 	my $i= $ex->iterator;

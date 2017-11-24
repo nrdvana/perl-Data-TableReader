@@ -1,4 +1,4 @@
-package Data::RecordExtractor::Iterator;
+package Data::TableReader::Iterator;
 
 use strict;
 use warnings;
@@ -8,7 +8,7 @@ use Scalar::Util 'refaddr';
 
 =head1 SYNOPSIS
 
-  my $iter= $record_extractor->iterator;
+  my $iter= $record_reader->iterator;
   while (my $rec= $iter->()) {
     ...
     my $position= $iter->tell;
@@ -26,7 +26,7 @@ use Scalar::Util 'refaddr';
 
 =head1 DESCRIPTION
 
-This is the abstract base class for iterators used in Data::RecordExtractor,
+This is the abstract base class for iterators used in Data::TableReader,
 which are blessed coderefs that return records on each call.
 
 =head1 ATTRIBUTES

@@ -1,8 +1,8 @@
-package Data::RecordExtractor::Field;
+package Data::TableReader::Field;
 
 use Moo 2;
 
-# ABSTRACT: Field description for Data::RecordExtractor
+# ABSTRACT: Field description for Data::TableReader
 
 =head1 DESCRIPTION
 
@@ -43,7 +43,7 @@ If this default matching doesn't meet your needs or paranoia level, then you sho
 specify your own header regexes.
 
 (If your data actually doesn't have any header at all and you want to brazenly assume the
-columns match the fields, see extractor attribute L<Data::RecordExtractor/header_row_at>)
+columns match the fields, see reader attribute L<Data::TableReader/header_row_at>)
 
 =head2 required
 
@@ -65,7 +65,7 @@ of C<trim>).  Default is C<undef>.  Another common value would be C<"">.
 
 A L<Type::Tiny> type (or any object or class with a C<check> method) or a coderef which will
 validate each value pulled from a cell for this field.  This is optional and there is no
-default.  The behavior of a validation failure depends on the options to RecordExtractor when
+default.  The behavior of a validation failure depends on the options to TableReader when
 creating an iterator.
 
 =head2 array
@@ -87,7 +87,7 @@ the following headers:
   FirstName | LastName | Tel. | Email | FirstName | LastName | Tel. | Email
 
 You can use C<qr/Father\nFirstName/> to identify the first column, but after FirstName the rest
-are ambiguous.  But, RecordExtractor can figure it out if you say:
+are ambiguous.  But, TableReader can figure it out if you say:
 
   { name => 'father_first', header => qr/Father\nFirstName/ },
   { name => 'father_last',  header => 'LastName', follows => 'father_first' },
@@ -96,7 +96,7 @@ are ambiguous.  But, RecordExtractor can figure it out if you say:
   ..
 
 and so on.  Note how C<'father_first'> is used for each as the C<follows> name; this way if any
-non-required fields (like maybe C<Tel>) are completely removed from the file, RecordExtractor
+non-required fields (like maybe C<Tel>) are completely removed from the file, TableReader
 will still be able to find C<LastName> and C<Email>.
 
 You can also use this to accumulate an array of columns that lack headers:
