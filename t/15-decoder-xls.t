@@ -27,8 +27,10 @@ sub run_test {
 	my $decoder= shift;
 
 	ok( my $iter= $decoder->iterator, 'got iterator' );
+	ok( my $iter2= $decoder->iterator, 'second parallel iterator' );
 
 	is_deeply( $iter->(), [ 'Name', 'Address', 'City', 'State', 'Zip' ], 'row 1' );
+	is_deeply( $iter2->(), [ 'Name', 'Address', 'City', 'State', 'Zip' ], 'row 1 from iterator 2' );
 	is_deeply( $iter->(), [ 'Someone', '123 Long St', 'Somewhere', 'OH', 45678 ], 'row 2' );
 	ok( my $pos= $iter->tell, 'tell position' );
 	is_deeply( $iter->(), [ ('') x 5 ], 'row 3 blank' );

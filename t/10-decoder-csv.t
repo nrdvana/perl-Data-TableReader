@@ -2,6 +2,7 @@
 use strict;
 use warnings;
 use Test::More;
+use Try::Tiny;
 
 use_ok( 'Data::TableReader::Decoder::CSV' ) or BAIL_OUT;
 
@@ -23,5 +24,12 @@ ok( $iter->seek(0), 'rewind' );
 is_deeply( $iter->(), [ 'a', 'b', 'c', 'd' ], 'first row again' );
 is_deeply( $iter->([2,1]), [ '3', '2' ], 'slice from second row' );
 ok( !$iter->next_dataset, 'no next dataset' );
+
+# This might be supported in the future, but for now ensure it dies
+like( (try { $d->iterator } catch {$_}), qr/multiple iterator/i, 'error for multiple iterators' );
+
+undef $iter; # release old iterator, freeing up the file handle to create a new one
+ok( $iter= $d->iterator, 'new iterator' );
+is_deeply( $iter->(), [ 'a', 'b', 'c', 'd' ], 'first row again' );
 
 done_testing;

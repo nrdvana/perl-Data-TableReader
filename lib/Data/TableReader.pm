@@ -13,7 +13,19 @@ use Data::TableReader::Iterator;
 
 =head1 SYNOPSIS
 
-  my $ex= Data::TableReader->new(
+  # Find a row in the Excel file containing the headers
+  #   "address", "city", "state", "zip" (in any order)
+  # and then convert each row under that into a hashref of those fields.
+  
+  my $records= Data::TableReader>new(
+      input => 'path/to/file.xlsx',
+      fields => [qw( address city state zip )],
+    )
+    ->iterator->all;
+
+but there's plenty of options to choose from...
+
+  my $tr= Data::TableReader->new(
     # path or file handle
     # let it auto-detect the format (but can override that if we need)
     input => 'path/to/file.csv',
@@ -44,7 +56,7 @@ use Data::TableReader::Iterator;
     log => \(my @messages)
   );
   
-  my $records= $ex->iterator->all;
+  my $records= $tr->iterator->all;
   ...
   $http_response->body( encode_json({ messages => \@messages }) );
 
@@ -91,18 +103,18 @@ construct them with) which this module should search for within the tables
 
 =head2 record_class
 
-Default is the special value 'HASH' for un-blessed hashref records.
-The special value 'ARRAY' will result in arrayrefs with fields in the same
+Default is the special value C<'HASH'> for un-blessed hashref records.
+The special value C<'ARRAY'> will result in arrayrefs with fields in the same
 order they were specified in the L</fields> specification.
 Setting it to anything else will return records created with
 C<< $record_class->new(\%fields); >>
 
 =head2 filters
 
-List of filters which should be applied to the data records after they have
-been pulled from the decoder but before they have been type-checked or passed
-to the record constructor (if any).  Each element of the list should be a
-coderef which receives a hashref and returns it, possibly modified.
+Array of filters which should be applied to the data records after they have
+been assembled but before they are passed to the record constructor (if any).
+Each element of this array should be a coderef which receives a hashref and
+returns it, possibly modified.
 
 =head2 static_field_order
 
@@ -359,6 +371,8 @@ sub _build__log {
 
 =head2 detect_input_format
 
+   my ($class, @args)= $tr->detect_input_format( $filename, $head_of_file );
+
 This is used internally to detect the format of a file, but you can call it manually if you
 like.  The first argument (optional) is a file name, and the second argument (also optional)
 is the first few hundred bytes of the file.  Missing arguments will be pulled from L</input>
@@ -421,6 +435,8 @@ sub detect_input_format {
 
 =head2 find_table
 
+  if ($tr->find_table) { ... }
+
 Search through the input for the beginning of the records, identified by a header row matching
 the various constraints defined in L</fields>.  If L</header_row_at> is undef, then this does
 nothing and assumes success.
@@ -431,18 +447,21 @@ All diagnostics about the search are logged via L</log>.
 
 =head2 col_map
 
-This is a lazy attribute from table detection.  After ccalling L</find_table> you can inspect
+This is a lazy attribute from table detection.  After calling L</find_table> you can inspect
 which fields were found for each column via this method.  If called before C<find_table>, this
-triggers it and throws an exception if one isn't found.
+triggers table detection and throws an exception if one isn't found.
 
 Returns an arrayref with one element for each column, each undefined or a reference to the
 Field object it matched.
 
 =head2 field_map
 
-This is another lazy attribute from table detection, mapping from field name to an array of
-column indicies which the field will be loaded from.  If called before C<find_table>, this
-triggers it and throws an exception if one isn't found.
+This is another lazy attribute from table detection, mapping from field name to column
+index/indicies which the field will be loaded from.  If called before C<find_table>, this
+triggers table detection and throws an exception if one isn't found.
+
+Returns a hashref where key is the field name, and value is either a single column index, or
+an arrayref of column indicies if the field is an L<array|Data::TableReader::Field/array> field.
 
 =cut
 
@@ -666,9 +685,17 @@ sub _match_headers_dynamic {
 
 =head2 iterator
 
+  my $iter= $tr->iterator;
+  while (my $rec= $iter->()) { ... }
+
 Create an iterator.  If the table has not been located, then find it and C<croak> if it
-can't be found.  Dependin on the decoder and input filehandle, you might only be able to
+can't be found.  Depending on the decoder and input filehandle, you might only be able to
 have one instance of the iterator at a time.
+
+The iterator derives from L<Data::TableReader::Iterator> but also has a method "all" which
+returns all records in an arrayref.
+
+  my $records= $tr->iterator->all;
 
 =cut
 

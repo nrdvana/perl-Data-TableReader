@@ -29,24 +29,22 @@ TableReader, this is always a coderef, to be called as:
 
   $log->($level, $message);
 
-=head2 iterator
-
-This lazy-builds the iterator from L</_build_iterator>
-
 =head1 METHODS
 
-=head2 _build_iterator
+=head2 iterator
 
 This must be implemented by the subclass, to return an instance of
-L<Data::TableReader::Iterator>.  The iterator should return an arrayref
-each time it is called.  The iterator may also accept a single argument of
-a list of columns to retrieve, rather than retrieving the full row.
+L<Data::TableReader::Iterator>.  The iterator should return an arrayref each time it is called,
+and accept one optional argument of a "slice" needed from the record.
+All decoder iterators return arrayrefs, so the slice should be an arrayref of column indicies
+equivalent to the perl syntax
+
+  @row[@$slice]
 
 =cut
 
 has file_name   => ( is => 'ro', required => 1 );
 has file_handle => ( is => 'ro', required => 1 );
 has log         => ( is => 'ro', required => 1 );
-has iterator    => ( is => 'lazy' );
 
 1;

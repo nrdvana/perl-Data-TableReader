@@ -31,6 +31,9 @@ use Scalar::Util 'refaddr';
 This is the abstract base class for iterators used in Data::TableReader,
 which are blessed coderefs that return records on each call.
 
+The coderef should support a single argument of a "slice" to extract from the record, in case
+not all of the record is needed.
+
 =head1 ATTRIBUTES
 
 =head2 position
@@ -81,6 +84,18 @@ sub _fields {
 
 sub DESTROY {
 	delete $_iterator_fields{refaddr shift};
+}
+
+sub progress {
+	undef;
+}
+
+sub tell {
+	undef;
+}
+
+sub seek {
+	undef;
 }
 
 sub next_dataset {

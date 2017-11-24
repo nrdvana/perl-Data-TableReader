@@ -2,7 +2,7 @@ package Data::TableReader::Field;
 
 use Moo 2;
 
-# ABSTRACT: Field description for Data::TableReader
+# ABSTRACT: Field specification for Data::TableReader
 
 =head1 DESCRIPTION
 
@@ -47,14 +47,14 @@ columns match the fields, see reader attribute L<Data::TableReader/header_row_at
 
 =head2 required
 
-Whether or not this field must be found in order to detect a table.  Defaults to true.
-Note this does U<not> require the cell of a row to contain data in order to read a record
-from the table.
+Whether or not this field must be found in order to detect a table.  Defaults is B<true>.
+Note this does B<not> require the field of a row to contain data in order to read a record
+from the table; it just requires a column to exist.
 
 =head2 trim
 
-Boolean, default C<1>.  Whether or not to remove prefix/suffix whitespace from each value of
-the field.
+Whether or not to remove prefix/suffix whitespace from each value of the field.
+Default is B<true>.
 
 =head2 blank
 
@@ -73,20 +73,19 @@ returns a validation error message (undef if it is valid).
   # or without Type::Tiny
      type => sub { $_[0] =~ /^\w+/? undef : "word-characters only" },
 
-This is optional and there is no default.
+This is an optional feature and there is no default.
 The behavior of a validation failure depends on the options to TableReader.
 
 =head2 array
 
-If true, then this field's header can be found multiple times and the value of the field will
-be an arrayref of all the extracted values.  If only one column is found, the field value will
-still be an arrayref (of one element).
+Boolean of whether this field can be found multiple times in one table.  Default is B<false>.
+If true, the value of the field will always be an arrayref (even if only one column matched).
 
 =head2 follows
 
 Name (or arrayref of names) of a field which this field must follow, in a first-to-last
-ordering of the columns.  This field must occur immediately after the named field, or after
-another field which also has a C<follows> restriction.
+ordering of the columns.  This field must occur immediately after the named field(s), or after
+another field which also has a C<follows> restriction and follows the named field(s).
 
 The purpose of this attribute is to resolve ambiguous columns.  Suppose you expect columns with
 the following headers:

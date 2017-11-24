@@ -9,8 +9,7 @@ extends 'Data::TableReader::Decoder::Spreadsheet';
 =head1 DESCRIPTION
 
 See L<Data::TableReader::Decoder::Spreadsheet>.
-This subclass simply initializes the parser with an instance of
-L<Spreadsheet::ParseExcel>.
+This subclass simply parses the input using an instance of L<Spreadsheet::ParseExcel>.
 
 =cut
 

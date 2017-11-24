@@ -17,7 +17,7 @@ compatible with L<Spreadsheet::ParseExcel>.
 
 See attributes from parent class: L<Data::TableReader::Decoder>.
 
-=head2 C<workbook>
+=head2 workbook
 
 This is an instance of L<Spreadsheet::ParseExcel>, L<Spreadsheet::ParseXLSX>,
 or L<Spreadsheet::XLSX> (which all happen have the same API).  Subclasses can
@@ -27,7 +27,7 @@ lazy-build this from the C<file_handle>.
 
 has workbook => ( is => 'lazy' );
 
-=head2 C<sheet>
+=head2 sheet
 
 This is either a sheet name, a regex for matching a sheet name, or a parser's
 worksheet object.  It is also optional; if not set, all sheets will be iterated.
@@ -65,14 +65,14 @@ sub _build__sheets {
 	return \@sheets;
 }
 
-sub _build_iterator {
+sub iterator {
 	my $self= shift;
 	my $sheets= $self->_sheets;
 	my $sheet= $sheets->[0];
 	my ($colmin, $colmax)= $sheet? $sheet->col_range() : (0,-1);
 	my ($rowmin, $rowmax)= $sheet? $sheet->row_range() : (0,-1);
 	my $row= $rowmin-1;
-	Data::TableReader::Decoder::Spreadsheet::_Iterator->new(
+	Data::TableReader::Decoder::Spreadsheet::_Iter->new(
 		sub {
 			my $slice= shift;
 			return undef unless $row < $rowmax;
@@ -102,51 +102,48 @@ sub _build_iterator {
 	);
 }
 
-{ package # Hide from CPAN
-	Data::TableReader::Decoder::Spreadsheet::_Iterator;
-	use strict;
-	use warnings;
-	use Carp;
-	use parent 'Data::TableReader::Iterator';
+# If you need to subclass this iterator, don't.  Just implement your own.
+# i.e. I'm not declaring this implementation stable, yet.
+use Data::TableReader::Iterator;
+BEGIN { @Data::TableReader::Decoder::Spreadsheet::_Iter::ISA= ('Data::TableReader::Iterator'); }
 
-	sub position {
-		my $f= shift->_fields;
-		'row '.${ $f->{row_ref} };
-	}
+sub Data::TableReader::Decoder::Spreadsheet::_Iter::position {
+	my $f= shift->_fields;
+	'row '.${ $f->{row_ref} };
+}
    
-	sub progress {
-		my $f= shift->_fields;
-		return ${ $f->{row_ref} } / (${ $f->{rowmax_ref} } || 1);
-	}
+sub Data::TableReader::Decoder::Spreadsheet::_Iter::progress {
+	my $f= shift->_fields;
+	return ${ $f->{row_ref} } / (${ $f->{rowmax_ref} } || 1);
+}
 
-	sub tell {
-		my $f= shift->_fields;
-		return [ $f->{sheet_idx}, ${$f->{row_ref}} ];
-	}
+sub Data::TableReader::Decoder::Spreadsheet::_Iter::tell {
+	my $f= shift->_fields;
+	return [ $f->{sheet_idx}, ${$f->{row_ref}} ];
+}
 
-	sub seek {
-		my ($self, $to)= @_;
-		my $f= $self->_fields;
-		$to ||= $f->{origin};
-		my ($sheet_idx, $row)= @$to;
-		my $sheet= $f->{sheets}[$sheet_idx];
-		my ($colmin, $colmax)= $sheet? $sheet->col_range() : (0,-1);
-		my ($rowmin, $rowmax)= $sheet? $sheet->row_range() : (0,-1);
-		$row= $rowmin-1 unless defined $row;
-		$f->{sheet_idx}= $sheet_idx;
-		${$f->{sheet_ref}}= $sheet;
-		${$f->{row_ref}}= $row;
-		${$f->{colmax_ref}}= $colmax;
-		${$f->{rowmax_ref}}= $rowmax;
-		1;
-	}
-	
-	sub next_dataset {
-		my $self= shift;
-		my $f= $self->_fields;
-		return defined $f->{sheets}[ $f->{sheet_idx}+1 ]
-			&& $self->seek([ $f->{sheet_idx}+1 ]);
-	}
+sub Data::TableReader::Decoder::Spreadsheet::_Iter::seek {
+	my ($self, $to)= @_;
+	my $f= $self->_fields;
+	$to ||= $f->{origin};
+	my ($sheet_idx, $row)= @$to;
+	my $sheet= $f->{sheets}[$sheet_idx];
+	my ($colmin, $colmax)= $sheet? $sheet->col_range() : (0,-1);
+	my ($rowmin, $rowmax)= $sheet? $sheet->row_range() : (0,-1);
+	$row= $rowmin-1 unless defined $row;
+	$f->{sheet_idx}= $sheet_idx;
+	${$f->{sheet_ref}}= $sheet;
+	${$f->{row_ref}}= $row;
+	${$f->{colmax_ref}}= $colmax;
+	${$f->{rowmax_ref}}= $rowmax;
+	1;
+}
+
+sub Data::TableReader::Decoder::Spreadsheet::_Iter::next_dataset {
+	my $self= shift;
+	my $f= $self->_fields;
+	return defined $f->{sheets}[ $f->{sheet_idx}+1 ]
+		&& $self->seek([ $f->{sheet_idx}+1 ]);
 }
 
 1;

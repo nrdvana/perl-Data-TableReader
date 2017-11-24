@@ -4,13 +4,12 @@ use Moo 2;
 use Carp;
 extends 'Data::TableReader::Decoder::Spreadsheet';
 
-# ABSTRACT: Access sheets/rows of a Microsoft Excel 2003+ spreadsheet
+# ABSTRACT: Access sheets/rows of a modern XML-based Microsoft Excel spreadsheet
 
 =head1 DESCRIPTION
 
 See L<Data::TableReader::Decoder::Spreadsheet>.
-This subclass simply initializes the parser with an instance of
-L<Spreadsheet::ParseXLSX>.
+This subclass simply parses the input using an instance of L<Spreadsheet::ParseXLSX>.
 
 =cut
 

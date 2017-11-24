@@ -1,0 +1,7 @@
+Version 0.002 - 2017-11-24
+ - Fixed 'filters' feature
+ - Iterators of decoders are now created on each call, rather than cached
+ - Many documentation improvements
+
+Version 0.001 - 2017-11-24
+ - Initial public version

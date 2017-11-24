@@ -7,7 +7,7 @@ use Log::Any '$log';
 
 extends 'Data::TableReader::Decoder::CSV';
 
-# ABSTRACT: Access rows of a badly formatted comma-delimited test file
+# ABSTRACT: Access rows of a badly formatted comma-delimited text file
 
 =head1 DESCRIPTION
 
