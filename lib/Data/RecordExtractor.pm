@@ -320,7 +320,7 @@ sub _build_field_by_name {
 sub _build_header_row_combine {
 	my $self= shift;
 	# If headers contain "\n", we need to collect multiple cells per column
-	max map { 1+($_->header_regex =~ /\n/g) } $self->field_list;
+	max map { 1+($_->header_regex =~ /\\n/g) } $self->field_list;
 }
 
 has _log => ( is => 'lazy', clearer => 1 );
@@ -339,7 +339,7 @@ sub _build__log {
 		push @$dest, [ $level, $msg ];
 	}
 	: ref($dest)->can('info')? sub {
-		my ($self, $level, $msg, @args)= @_;
+		my ($level, $msg, @args)= @_;
 		$level.='f' if @args;
 		$dest->$level($msg, @args);
 	}
@@ -391,7 +391,7 @@ sub detect_input_format {
 	return $suffix if length $suffix;
 
 	# Else probe some more...
-	$self->_write_log('debug',"Probing file format because no filename suffix");
+	$self->_log->('debug',"Probing file format because no filename suffix");
 	length $magic or croak "Can't probe format. No filename suffix, and "
 		.($fpos >= 0? "unseekable file handle" : "no content");
 
@@ -786,7 +786,7 @@ sub _handle_blank_row {
 	}
 	if ($act eq 'die') {
 		my $msg= "Encountered blank rows at $first..$last";
-		$self->_write_log('error', $msg);
+		$self->_log->('error', $msg);
 		croak $msg;
 	}
 	croak "Invalid value for 'on_blank_row': \"$act\"";

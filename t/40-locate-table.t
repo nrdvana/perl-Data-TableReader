@@ -20,7 +20,7 @@ subtest basic => sub {
 				{ name => 'state' },
 				{ name => 'zip' },
 			],
-			logger => $log,
+			log => $log,
 		], 'Record extractor' );
 	isa_ok( $ex->decoder, 'Data::RecordExtractor::Decoder::XLSX', 'detected format' );
 	isa_ok( $ex->fields->[3], 'Data::RecordExtractor::Field', 'coerced fields list' );
@@ -37,11 +37,11 @@ subtest find_on_second_sheet => sub {
 	my $ex= new_ok( 'Data::RecordExtractor', [
 			input => open_data('AddressAuxData.xlsx'),
 			fields => [
-				{ name => 'postcode', required => 1 },
-				{ name => 'country', required => 1 },
-				{ name => 'state', required => 1 },
+				{ name => 'postcode' },
+				{ name => 'country' },
+				{ name => 'state' },
 			],
-			logger => $log,
+			log => $log,
 		], 'Record extractor' );
 	ok( $ex->find_table, 'found table' );
 	ok( my $i= $ex->iterator, 'iterator' );
@@ -51,6 +51,42 @@ subtest find_on_second_sheet => sub {
 	is_deeply( $i->(), { state => 'Arkansas',postcode => 'AR', country => 'US' }, 'row 4' );
 	is_deeply( $i->(), { state => 'American Samoa', postcode => 'AS', country => 'US' }, 'row 5' );
 	is( $i->(), undef, 'eof' );
+};
+
+subtest find_required => sub {
+	open(my $csv, '<', \"q,w,e,r,t,y\nq,w,e,r,t,a,s,d\n") or die;
+	my $ex= new_ok( 'Data::RecordExtractor', [
+			input => $csv,
+			fields => [
+				{ name => 'q', required => 1 },
+				{ name => 'w', required => 1 },
+				{ name => 'a', required => 0 },
+				{ name => 'b', required => 0 },
+				{ name => 'y', required => 0 },
+				{ name => 's', required => 1 },
+			],
+			log => $log,
+		], 'Record extractor' );
+	ok( $ex->find_table, 'found table' );
+	is_deeply( $ex->field_map, { q => 0, w => 1, a => 5, s => 6 }, 'field_map' );
+	is_deeply( $ex->iterator->all(), [], 'immediate eof' );
+};
+
+subtest multiline_header => sub {
+	open(my $csv, '<', \"a,b,c\nd,e,f\ng,b,c\nA,B,C") or die;
+	my $ex= new_ok( 'Data::RecordExtractor', [
+			input => $csv,
+			fields => [
+				{ name => 'a', header => "d g" },
+				{ name => 'b', header => 'b' },
+				{ name => 'c', header => qr/^f\nc$/ },
+			],
+			log => $log,
+		], 'Record extractor' );
+	is( $ex->header_row_combine, 2, 'header_row_combine' );
+	ok( $ex->find_table, 'found table' );
+	is_deeply( $ex->field_map, { a => 0, b => 1, c => 2 }, 'field_map' );
+	is_deeply( $ex->iterator->all(), [{a=>'A',b=>'B',c=>'C'}], 'found row' );
 };
 
 done_testing;

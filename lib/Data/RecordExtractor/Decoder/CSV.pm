@@ -62,7 +62,7 @@ sub _build_iterator {
 	Data::RecordExtractor::Decoder::CSV::Iterator->new(
 		sub {
 			++$row;
-			my $r= $parser->getline($fh);
+			my $r= $parser->getline($fh) or return;
 			@$r= @{$r}[ @{$_[0]} ] if $_[0]; # optional slice argument
 			return $r;
 		},
