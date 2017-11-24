@@ -387,7 +387,8 @@ sub detect_input_format {
 	return ( 'XLSX' ) if $magic =~ /^PK(\x03\x04|\x05\x06|\x07\x08)/;
 	return ( 'XLS'  ) if $magic =~ /^\xD0\xCF\x11\xE0/;
 
-	# Else trust the file extension
+	# Else trust the file extension, because TSV with commas can be very similar to CSV with
+	# tabs in the data.
 	return $suffix if length $suffix;
 
 	# Else probe some more...
@@ -767,7 +768,7 @@ sub _build_iterator {
 		return $class? $class->new(\%rec) : \%rec;
 	};
 	return Data::RecordExtractor::_RecordIterator->new(
-		$sub, { data_iter => $data_iter },
+		$sub, { data_iter => $data_iter, extractor => $self },
 	);
 }
 
@@ -816,7 +817,9 @@ sub _handle_blank_row {
 		shift->_fields->{data_iter}->seek(@_);
 	}
 	sub next_dataset {
-		shift->_fields->{data_iter}->next_dataset(@_);
+		shift->_fields->{extractor}->_log
+			->('warn',"Searching for supsequent table headers is not supported yet");
+		return 0;
 	}
 }
 
