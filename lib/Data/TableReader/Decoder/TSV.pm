@@ -5,6 +5,8 @@ use Try::Tiny;
 use Carp;
 use Log::Any '$log';
 
+# ABSTRACT: Access rows of a tab-delimited text file
+
 =head1 DESCRIPTION
 
 This module is a simple subclass of L<Data::TableReader::Decoder::CSV>

@@ -7,6 +7,7 @@ use Carp;
 use List::Util 'max';
 use Module::Runtime 'require_module';
 use Data::TableReader::Field;
+use Data::TableReader::Iterator;
 
 # ABSTRACT: Extract records from "dirty" tabular data sources
 
@@ -767,7 +768,7 @@ sub _build_iterator {
 		# Construct a class, if requested, else return hashref
 		return $class? $class->new(\%rec) : \%rec;
 	};
-	return Data::TableReader::_RecordIterator->new(
+	return Data::TableReader::_RecIter->new(
 		$sub, { data_iter => $data_iter, reader => $self },
 	);
 }
@@ -793,34 +794,29 @@ sub _handle_blank_row {
 	croak "Invalid value for 'on_blank_row': \"$act\"";
 }
 
-{ package # Hide from CPAN
-	Data::TableReader::_RecordIterator;
-	use strict;
-	use warnings;
-	use parent 'Data::TableReader::Iterator';
-	sub all {
-		my $self= shift;
-		my (@rec, $x);
-		push @rec, $x while ($x= $self->());
-		return \@rec;
-	}
-	sub position {
-		shift->_fields->{data_iter}->position(@_);
-	}
-	sub progress {
-		shift->_fields->{data_iter}->progress(@_);
-	}
-	sub tell {
-		shift->_fields->{data_iter}->tell(@_);
-	}
-	sub seek {
-		shift->_fields->{data_iter}->seek(@_);
-	}
-	sub next_dataset {
-		shift->_fields->{reader}->_log
-			->('warn',"Searching for supsequent table headers is not supported yet");
-		return 0;
-	}
+BEGIN { @Data::TableReader::_RecIter::ISA= ( 'Data::TableReader::Iterator' ) }
+sub Data::TableReader::_RecIter::all {
+	my $self= shift;
+	my (@rec, $x);
+	push @rec, $x while ($x= $self->());
+	return \@rec;
+}
+sub Data::TableReader::_RecIter::position {
+	shift->_fields->{data_iter}->position(@_);
+}
+sub Data::TableReader::_RecIter::progress {
+	shift->_fields->{data_iter}->progress(@_);
+}
+sub Data::TableReader::_RecIter::tell {
+	shift->_fields->{data_iter}->tell(@_);
+}
+sub Data::TableReader::_RecIter::seek {
+	shift->_fields->{data_iter}->seek(@_);
+}
+sub Data::TableReader::_RecIter::next_dataset {
+	shift->_fields->{reader}->_log
+		->('warn',"Searching for supsequent table headers is not supported yet");
+	return 0;
 }
 
 1;

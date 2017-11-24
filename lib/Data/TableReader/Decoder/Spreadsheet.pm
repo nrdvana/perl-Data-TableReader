@@ -6,6 +6,8 @@ use IO::Handle;
 
 extends 'Data::TableReader::Decoder';
 
+# ABSTRACT: Base class for implementing spreadsheet decoders
+
 =head1 DESCRIPTION
 
 This is a base class for any file format that exposes a spreadsheet API

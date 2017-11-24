@@ -4,6 +4,8 @@ use Moo 2;
 use Carp;
 extends 'Data::TableReader::Decoder::Spreadsheet';
 
+# ABSTRACT: Access sheets/rows of a Microsoft Excel 2003+ spreadsheet
+
 =head1 DESCRIPTION
 
 See L<Data::TableReader::Decoder::Spreadsheet>.

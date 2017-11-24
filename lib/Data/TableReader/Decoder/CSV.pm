@@ -14,6 +14,8 @@ sub _csv_class {
 	};
 }
 
+# ABSTRACT: Access rows of a comma-delimited text file
+
 =head1 DESCRIPTION
 
 This decoder wraps an instance of either Text::CSV or Text::CSV_XS.

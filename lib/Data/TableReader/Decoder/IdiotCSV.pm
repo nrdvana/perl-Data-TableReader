@@ -7,6 +7,8 @@ use Log::Any '$log';
 
 extends 'Data::TableReader::Decoder::CSV';
 
+# ABSTRACT: Access rows of a badly formatted comma-delimited test file
+
 =head1 DESCRIPTION
 
 This decoder deals with those special people who think that encoding CSV is

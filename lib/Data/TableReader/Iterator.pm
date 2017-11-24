@@ -6,6 +6,8 @@ use Try::Tiny;
 use Carp;
 use Scalar::Util 'refaddr';
 
+# ABSTRACT: Base class for iterators (blessed coderefs)
+
 =head1 SYNOPSIS
 
   my $iter= $record_reader->iterator;

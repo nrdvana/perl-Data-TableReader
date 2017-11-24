@@ -2,6 +2,8 @@ package Data::TableReader::Decoder;
 
 use Moo 2;
 
+# ABSTRACT: Base class for table decoders
+
 =head1 DESCRIPTION
 
 This is an abstract base class describing the API for decoders.
