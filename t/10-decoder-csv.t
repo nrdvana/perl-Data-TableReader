@@ -6,7 +6,7 @@ use Try::Tiny;
 use Data::TableReader::Decoder::CSV;
  
 plan skip_all => 'Need a CSV parser for this test'
-	unless Data::TableReader::Decoder::CSV->default_csv_module;
+	unless try { Data::TableReader::Decoder::CSV->default_csv_module };
 
 my $input= <<END;
 a,b,c,d

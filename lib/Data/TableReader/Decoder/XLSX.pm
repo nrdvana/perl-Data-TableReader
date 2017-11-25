@@ -10,7 +10,7 @@ our $default_xlsx_module;
 sub default_xlsx_module {
 	$default_xlsx_module ||= do {
 		eval "require $_" && return $_ for @xlsx_probe_modules;
-		croak "No CSV parser available; install one of: ".join(', ', @xlsx_probe_modules);
+		croak "No XLSX parser available; install one of: ".join(', ', @xlsx_probe_modules);
 	};
 }
 
