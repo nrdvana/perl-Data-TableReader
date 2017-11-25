@@ -2,23 +2,32 @@
 use strict;
 use warnings;
 use Test::More;
+use Try::Tiny;
 use File::Spec::Functions 'catfile';
+use Data::TableReader::Decoder::XLSX;
+use Data::TableReader::Decoder::XLS;
 
+SKIP: {
+skip "Need an XLS parser", 1
+	unless try { Data::TableReader::Decoder::XLS->default_xls_module };
 subtest XLS => sub {
-	use_ok( 'Data::TableReader::Decoder::XLS' ) or die;
 	my $xls= new_ok( 'Data::TableReader::Decoder::XLS',
 		[ file_name => '', file_handle => open_data('AddressAuxData.xls'), log => sub {} ],
 		'XLS decoder' );
 	run_test($xls);
 };
+}
 
+SKIP: {
+skip "Need an XLSX parser", 1
+	unless try { Data::TableReader::Decoder::XLSX->default_xlsx_module };
 subtest XLSX => sub {
-	use_ok( 'Data::TableReader::Decoder::XLSX' ) or BAIL_OUT;
 	my $xlsx= new_ok( 'Data::TableReader::Decoder::XLSX',
 		[ file_name => '', file_handle => open_data('AddressAuxData.xlsx'), log => sub {} ],
 		'XLSX decoder' );
 	run_test($xlsx);
 };
+}
 
 done_testing;
 

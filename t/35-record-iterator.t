@@ -8,11 +8,20 @@ use Log::Any::Adapter 'TAP';
 use_ok( 'Data::TableReader' ) or BAIL_OUT;
 
 subtest iterator_weakref => sub {
-	open(my $csv, '<', \"a,b,c\n1,2,3\n") or die;
-	my $re= new_ok( 'Data::TableReader',
-		[ input => $csv, decoder => 'CSV', fields => ['a','b','c'], log => $log ],
-		'TableReader'
-	);
+	my $re= new_ok( 'Data::TableReader', [
+			input => \'',
+			decoder => {
+				CLASS => 'Mock',
+				data => [
+					[
+						[qw( a b c )],
+						[qw( 1 2 3 )],
+					]
+				]
+			},
+			fields => ['a','b','c'],
+			log => $log
+		], 'TableReader' );
 	ok( $re->find_table, 'find_table' ) or die "Can't continue without table";
 	ok( my $i= $re->iterator, 'create iterator' );
 	my $i_name= "$i";
@@ -23,16 +32,23 @@ subtest iterator_weakref => sub {
 };
 
 subtest filters => sub {
-	open(my $csv, '<', \"a,b,c\n1,2,3\n") or die;
-	my $tr= new_ok( 'Data::TableReader',
-		[ input => $csv, decoder => 'CSV', fields => ['a','b','c'],
+	my $tr= new_ok( 'Data::TableReader', [
+			input => \'',
+			decoder => {
+				CLASS => 'Mock',
+				data => [
+					[
+						[qw( a b c )],
+						[qw( 1 2 3 )],
+					]
+				]
+			},
+			fields => ['a','b','c'],
 			filters => [
 				sub { $_[0]{c}= sprintf('%05d', $_[0]{c}); }
 			],
 			log => $log
-		],
-		'TableReader'
-	);
+		], 'TableReader' );
 	ok( my $i= $tr->iterator, 'interator' );
 	is_deeply( $i->all, [ { a => 1, b => 2, c => '00003' } ], 'read rows' );
 };

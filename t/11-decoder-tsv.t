@@ -2,8 +2,10 @@
 use strict;
 use warnings;
 use Test::More;
+use Data::TableReader::Decoder::TSV;
 
-use_ok( 'Data::TableReader::Decoder::TSV' ) or BAIL_OUT;
+plan skip_all => 'Need a CSV parser for this test'
+	unless Data::TableReader::Decoder::TSV->default_csv_module;
 
 my $input= <<END;
 a	b	c	d

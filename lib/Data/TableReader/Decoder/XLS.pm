@@ -4,6 +4,15 @@ use Moo 2;
 use Carp;
 extends 'Data::TableReader::Decoder::Spreadsheet';
 
+our @xls_probe_modules= qw( Spreadsheet::ParseExcel );
+our $default_xls_module;
+sub default_xls_module {
+	$default_xls_module ||= do {
+		eval "require $_" && return $_ for @xls_probe_modules;
+		croak "No XLS parser available; install one of: ".join(', ', @xls_probe_modules);
+	};
+}
+
 # ABSTRACT: Access sheets/rows of a Microsoft Excel '97 spreadsheet
 
 =head1 DESCRIPTION
@@ -21,8 +30,7 @@ sub _build_workbook {
 	if (ref $f and ref($f)->can('worksheets')) {
 		$wbook= $f;
 	} else {
-		require Spreadsheet::ParseExcel;
-		$wbook= Spreadsheet::ParseExcel->new->parse($f);
+		$wbook= $self->default_xls_module->new->parse($f);
 	}
 	defined $wbook or croak "Can't parse file '".$self->file_name."'";
 	return $wbook;

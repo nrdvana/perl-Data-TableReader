@@ -26,7 +26,7 @@ extends 'Data::TableReader::Decoder::CSV';
 
 sub _build_parser {
 	my $args= shift->_parser_args || {};
-	Data::TableReader::Decoder::CSV->_csv_class->new({
+	Data::TableReader::Decoder::CSV->default_csv_module->new({
 		binary => 1,
 		allow_loose_quotes => 1,
 		auto_diag => 2,

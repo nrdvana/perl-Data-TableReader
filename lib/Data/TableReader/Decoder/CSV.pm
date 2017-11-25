@@ -3,14 +3,15 @@ package Data::TableReader::Decoder::CSV;
 use Moo 2;
 use Try::Tiny;
 use Carp;
+use IO::Handle;
 extends 'Data::TableReader::Decoder';
 
-our $_csv_class;
-sub _csv_class {
-	$_csv_class ||= do {
-		eval { require Text::CSV_XS; }? 'Text::CSV_XS'
-			: eval { require Text::CSV; }? 'Text::CSV'
-			: croak "Require either Text::CSV_XS or Text::CSV : $@"
+our @csv_probe_modules= qw( Text::CSV_XS Text::CSV );
+our $default_csv_module;
+sub default_csv_module {
+	$default_csv_module ||= do {
+		eval "require $_" && return $_ for @csv_probe_modules;
+		croak "No CSV parser available; install one of: ".join(', ', @csv_probe_modules);
 	};
 }
 
@@ -53,7 +54,8 @@ sub _build_parser {
 	my $self= shift;
 	my $args= $self->_parser_args || {};
 	return $args if ref($args)->can('getline');
-	return $self->_csv_class->new({ binary => 1, allow_loose_quotes => 1, auto_diag => 2, %$args });
+	return $self->default_csv_module
+		->new({ binary => 1, allow_loose_quotes => 1, auto_diag => 2, %$args });
 }
 
 has _fh_start_pos => ( is => 'rw' );
@@ -65,9 +67,9 @@ sub iterator {
 	my $row= 0;
 	my $fh= $self->file_handle;
 	if (defined $self->_fh_start_pos) {
-		$fh->seek($self->_fh_start_pos, 0) or die "Can't seek back to start of stream";
+		seek($fh, $self->_fh_start_pos, 0) or die "Can't seek back to start of stream";
 	} else {
-		$self->_fh_start_pos($fh->tell);
+		$self->_fh_start_pos(tell $fh);
 	}
 	my $i= Data::TableReader::Decoder::CSV::_Iter->new(
 		sub {

@@ -3,8 +3,10 @@ use strict;
 use warnings;
 use Test::More;
 use Try::Tiny;
-
-use_ok( 'Data::TableReader::Decoder::CSV' ) or BAIL_OUT;
+use Data::TableReader::Decoder::CSV;
+ 
+plan skip_all => 'Need a CSV parser for this test'
+	unless Data::TableReader::Decoder::CSV->default_csv_module;
 
 my $input= <<END;
 a,b,c,d

@@ -2,7 +2,6 @@ package Data::TableReader;
 
 use Moo 2;
 use Try::Tiny;
-use URI;
 use Carp;
 use List::Util 'max';
 use Module::Runtime 'require_module';
@@ -396,10 +395,10 @@ sub detect_input_format {
 	my $fpos;
 	if (!defined $magic) {
 		my $fh= $self->_file_handle;
-		$fpos= $fh->tell;
+		$fpos= tell $fh;
 		if (defined $fpos && $fpos >= 0) {
-			$fh->read($magic, 4096);
-			$fh->seek($fpos, 0) or croak "seek: $!";
+			read($fh, $magic, 4096);
+			seek($fh, $fpos, 0) or croak "seek: $!";
 		} else {
 			$magic= '';
 		}
@@ -546,11 +545,13 @@ sub _find_table_in_dataset {
 	
 	# Scan through the rows of the dataset up to the end of header_row_at, accumulating rows so that
 	# multi-line regexes can match.
-	for ($start..$end) {
-		push @rows, $data_iter->() || last; # if undef, we reached end of dataset
-		splice @rows, 0, @rows-$row_accum; # only need to retain $row_accum number of rows
-		my $vals= $row_accum == 1? $rows[-1]
-			: [ map { my $c= $_; join("\n", map $_->[$c], @rows) } 0 .. $#{$rows[-1]} ];
+	for ($start .. $end) {
+		my $vals= $data_iter->() or last; # if undef, we reached end of dataset
+		if ($row_accum > 1) {
+			push @rows, $vals;
+			splice @rows, 0, @rows-$row_accum; # only need to retain $row_accum number of rows
+			$vals= [ map { my $c= $_; join("\n", map $_->[$c], @rows) } 0 .. $#{$rows[-1]} ];
+		}
 		$stash->{context}= $data_iter->position.': ';
 		$stash->{col_map}= $self->static_field_order?
 			# If static field order, look for headers in sequence

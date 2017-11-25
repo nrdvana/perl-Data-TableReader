@@ -2,8 +2,10 @@
 use strict;
 use warnings;
 use Test::More;
+use Data::TableReader::Decoder::IdiotCSV;
 
-use_ok( 'Data::TableReader::Decoder::IdiotCSV' ) or BAIL_OUT;
+plan skip_all => 'Need a CSV parser for this test'
+	unless Data::TableReader::Decoder::IdiotCSV->default_csv_module;
 
 my $input= <<END;
 "First Name","Last Name","Nickname"

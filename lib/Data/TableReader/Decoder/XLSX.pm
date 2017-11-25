@@ -2,7 +2,17 @@ package Data::TableReader::Decoder::XLSX;
 
 use Moo 2;
 use Carp;
+use Try::Tiny;
 extends 'Data::TableReader::Decoder::Spreadsheet';
+
+our @xlsx_probe_modules= qw( Spreadsheet::ParseXLSX Spreadsheet::XLSX );
+our $default_xlsx_module;
+sub default_xlsx_module {
+	$default_xlsx_module ||= do {
+		eval "require $_" && return $_ for @xlsx_probe_modules;
+		croak "No CSV parser available; install one of: ".join(', ', @xlsx_probe_modules);
+	};
+}
 
 # ABSTRACT: Access sheets/rows of a modern XML-based Microsoft Excel spreadsheet
 
@@ -21,8 +31,13 @@ sub _build_workbook {
 	if (ref $f and ref($f)->can('worksheets')) {
 		$wbook= $f;
 	} else {
-		require Spreadsheet::ParseXLSX;
-		$wbook= Spreadsheet::ParseXLSX->new->parse($f);
+		my $class= $self->default_xlsx_module;
+		# Spreadsheet::XLSX has an incompatible constructor
+		if ($class->isa('Spreadsheet::XLSX')) {
+			$wbook= $class->new($f);
+		} else {
+			$wbook= $class->new->parse($f);
+		}
 	}
 	defined $wbook or croak "Can't parse file '".$self->file_name."'";
 	return $wbook;

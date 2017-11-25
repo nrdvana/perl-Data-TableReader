@@ -1,3 +1,9 @@
+Version 0.003 - 2017-11-25
+ - Remove hard dependencies on CSV and Excel parsers
+ - Use new "Mock" decoder for format-independent test cases
+ - Fix handling of $TableReader->log to match API description
+ - Fix bugs to be compatible back to 5.8.9
+
 Version 0.002 - 2017-11-24
  - Fixed 'filters' feature
  - Iterators of decoders are now created on each call, rather than cached
