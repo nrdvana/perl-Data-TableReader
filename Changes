@@ -1,3 +1,7 @@
+Version 0.004 - 2017-11-26
+ - Re-add Text::CSV as a hard dependency since it's small and I need a recent
+   version for all the tests to pass.
+
 Version 0.003 - 2017-11-25
  - Remove hard dependencies on CSV and Excel parsers
  - Use new "Mock" decoder for format-independent test cases

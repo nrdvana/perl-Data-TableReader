@@ -19,11 +19,11 @@ as simple as
 regardless of their data containing quote characters or newlines, resulting in
 garbage like
 
-  "First Name","Last Name","Full Name"
-  "Joe","Smith","Joe "Bossman" Smith"
+  "First Name","Last Name","Nickname"
+  "Joe","Smith",""SuperJoe, to the rescue""
 
-This can actually be processed by the L<Text::CSV> module with the following
-configuration:
+This can actually be processed by (recent versions of) the L<Text::CSV> module
+with the following configuration:
 
   {
     binary => 1,
