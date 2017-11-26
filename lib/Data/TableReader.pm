@@ -38,15 +38,6 @@ but there's plenty of options to choose from...
       { name => 'zip', header => qw/zip\b|postal/i, type => US_Zipcode },
     ],
     
-    # could do this after extraction, but this fixes it before the type validation
-    filters => [
-       # they keep losing the leading zeroes on our zip codes. grr.
-       sub {
-         $_[0]{zip} =~ s/^(\d+)(-(\d+))?$/sprintf("%05d-%04d", $1, $3||0)/e;
-         return $_[0];
-       },
-    ],
-    
     # Our data provider is horrible; just ignore any nonsense we encounter
     on_blank_row => 'next',
     on_validation_fail => 'next',
@@ -107,13 +98,6 @@ The special value C<'ARRAY'> will result in arrayrefs with fields in the same
 order they were specified in the L</fields> specification.
 Setting it to anything else will return records created with
 C<< $record_class->new(\%fields); >>
-
-=head2 filters
-
-Array of filters which should be applied to the data records after they have
-been assembled but before they are passed to the record constructor (if any).
-Each element of this array should be a coderef which receives a hashref and
-returns it, possibly modified.
 
 =head2 static_field_order
 
@@ -258,7 +242,6 @@ has fields              => ( is => 'rw', required => 1, coerce => \&_coerce_fiel
 sub field_list             { @{ shift->fields } }
 has field_by_name       => ( is => 'lazy' );
 has record_class        => ( is => 'rw', required => 1, default => sub { 'HASH' } );
-has filters             => ( is => 'rw' ); # list of coderefs to apply to the data
 has static_field_order  => ( is => 'rw' ); # force order of columns
 has header_row_at       => ( is => 'rw', default => sub { [1,10] } ); # row of header, or range to scan
 has header_row_combine  => ( is => 'rw', lazy => 1, builder => 1 );
@@ -776,7 +759,6 @@ sub iterator {
 		}
 	}
 	@arrayvals= reverse @arrayvals;
-	my @filters= @{ $self->filters || [] };
 	my ($n_blank, $first_blank, $eof);
 	my $sub= sub {
 		again:
@@ -813,15 +795,10 @@ sub iterator {
 		# Collect all the array-valued fields from the tail of the row
 		$row->[$_->[0]]= [ splice @$row, $_->[1], $_->[2] ] for @arrayvals;
 		# stop here if the return class is 'ARRAY'
-		unless (@field_names) {
-			$_->($row) for @filters;
-			return $row;
-		}
+		return $row unless @field_names;
 		# Convert the row to a hashref
 		my %rec;
 		@rec{@field_names}= @$row;
-		# Apply any filters
-		$_->(\%rec) for @filters;
 		# Construct a class, if requested, else return hashref
 		return $class? $class->new(\%rec) : \%rec;
 	};

@@ -33,26 +33,4 @@ subtest multiple_iterator => sub {
 	is_deeply( $i3->all, [ { a => 1, b => 2, c => 3 } ], 'read rows from i3' );
 };
 
-subtest filters => sub {
-	my $tr= new_ok( 'Data::TableReader', [
-			input => \'',
-			decoder => {
-				CLASS => 'Mock',
-				data => [
-					[
-						[qw( a b c )],
-						[qw( 1 2 3 )],
-					]
-				]
-			},
-			fields => ['a','b','c'],
-			filters => [
-				sub { $_[0]{c}= sprintf('%05d', $_[0]{c}); }
-			],
-			log => $log
-		], 'TableReader' );
-	ok( my $i= $tr->iterator, 'interator' );
-	is_deeply( $i->all, [ { a => 1, b => 2, c => '00003' } ], 'read rows' );
-};
-
 done_testing;
