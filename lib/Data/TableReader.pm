@@ -700,37 +700,18 @@ returns all records in an arrayref.
 
 =cut
 
-has _iterator => ( is => 'rw', weak_ref => 1 );
 sub iterator {
 	my $self= shift;
-	if ($self->_iterator) {
-		# old one is still out there, so need a new data handle
-		my $data_iter= $self->decoder->iterator;
-		$data_iter->seek($self->_data_iter_record_start);
-		$self->_data_iter($data_iter);
-	}
-	$self->_iterator(my $i= $self->_build_iterator);
-	return $i;
-}
-
-sub _make_validation_callback {
-	my ($self, $field, $index)= @_;
-	my $t= $field->type;
-	ref $t eq 'CODE'? sub {
-		my $e= $t->($_[0][$index]);
-		defined $e? ([ $field, $index, $e ]) : ()
-	}
-	: $t->can('validate')? sub {
-		my $e= $t->validate($_[0][$index]);
-		defined $e? ([ $field, $index, $e ]) : ()
-	}
-	: croak "Invalid type constraint $t on field ".$field->name;
-}
-
-sub _build_iterator {
-	my $self= shift;
 	my $fields= $self->fields;
-	my $data_iter= $self->_table_found->{data_iter};
+	# Creating the record iterator consumes the data source's iterator.
+	# The first time after detecting the table, we continue with the same iterator.
+	# Every time after that we need to create a new data iterator and seek to the
+	# first record under the header.
+	my $data_iter= delete $self->_table_found->{data_iter};
+	unless ($data_iter) {
+		$data_iter= $self->decoder->iterator;
+		$data_iter->seek($self->_table_found->{first_record_pos});
+	}
 	my $col_map=   $self->_table_found->{col_map};
 	my $field_map= $self->_table_found->{field_map};
 	my @row_slice; # one column index per field, and possibly more for array_val_map
@@ -839,6 +820,20 @@ sub _build_iterator {
 	return Data::TableReader::_RecIter->new(
 		$sub, { data_iter => $data_iter, reader => $self },
 	);
+}
+
+sub _make_validation_callback {
+	my ($self, $field, $index)= @_;
+	my $t= $field->type;
+	ref $t eq 'CODE'? sub {
+		my $e= $t->($_[0][$index]);
+		defined $e? ([ $field, $index, $e ]) : ()
+	}
+	: $t->can('validate')? sub {
+		my $e= $t->validate($_[0][$index]);
+		defined $e? ([ $field, $index, $e ]) : ()
+	}
+	: croak "Invalid type constraint $t on field ".$field->name;
 }
 
 sub _handle_blank_row {
