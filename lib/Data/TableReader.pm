@@ -667,7 +667,7 @@ sub _match_headers_dynamic {
 	my @unclaimed= grep { !$col_map{$_} } 0 .. $#$header;
 	if (@unclaimed) {
 		my $act= $self->on_unknown_columns;
-		my $unknown_list= join(', ', map $header->[$_], @unclaimed);
+		my $unknown_list= join(', ', map $self->_fmt_header_text($header->[$_]), @unclaimed);
 		$act= $act->($self, $header, \@unclaimed) if ref $act eq 'CODE';
 		if ($act eq 'use') {
 			$self->_log->('warn','%sIgnoring unknown columns: %s', $context, $unknown_list);
@@ -682,6 +682,14 @@ sub _match_headers_dynamic {
 		return if $stash->{fatal};
 	}
 	return [ map $col_map{$_}, 0 .. $#$header ];
+}
+# Make header string readable for log messages
+sub _fmt_header_text {
+	shift if ref $_[0];
+	$_[0] =~ s/[\0-\x1F]+/ /g;
+	$_[0] =~ s/^\s+//;
+	$_[0] =~ s/\s+$//;
+	$_[0];
 }
 
 =head2 iterator
