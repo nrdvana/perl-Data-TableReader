@@ -1,3 +1,6 @@
+ - Auto-detect CSV Unicode format by looking for BOM, unless handle
+   already has an IO layer to specify encoding.
+
 Version 0.005 - 2017-11-26
  - Remove 'filters' feature since it adds overhead and not much value
  - Fix bug when creating multiple parallel record iterators

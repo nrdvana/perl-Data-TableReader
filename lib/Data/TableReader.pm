@@ -254,7 +254,7 @@ sub _build__file_handle {
 	my $self= shift;
 	my $i= $self->input;
 	return $i if ref($i) && (ref($i) eq 'GLOB' or ref($i)->can('read'));
-	open(my $fh, '<', $i) or croak "open($i): $!";
+	open(my $fh, '<:raw', $i) or croak "open($i): $!";
 	return $fh;
 }
 
@@ -378,11 +378,18 @@ sub detect_input_format {
 	my $fpos;
 	if (!defined $magic) {
 		my $fh= $self->_file_handle;
-		$fpos= tell $fh;
-		if (defined $fpos && $fpos >= 0) {
+		# Need to be able to seek.
+		if (seek($fh, 0, 1)) {
 			read($fh, $magic, 4096);
 			seek($fh, $fpos, 0) or croak "seek: $!";
-		} else {
+		}
+		elsif ($fh->can('ungets')) {
+			read($fh, $magic, 4096);
+			$fh->ungets($magic);
+		}
+		else {
+			$self->_log('notice',"Can't fully detect input format because handle is not seekable."
+				." Consider fully buffering the file, or using FileHandle::Unget");
 			$magic= '';
 		}
 	}
