@@ -20,6 +20,16 @@ sub default_xls_module {
 See L<Data::TableReader::Decoder::Spreadsheet>.
 This subclass simply parses the input using an instance of L<Spreadsheet::ParseExcel>.
 
+=head1 CLASS METHODS
+
+=head2 default_xls_module
+
+Initializes C<@Data::TableReader::Decoder::XLS::default_xls_module> to the first
+available module in the list of C<@Data::TableReader::Decoder::XLS::xls_probe_modules>
+and returns the cached value every time afterward.
+
+Those variables can be modified as needed, if you have other XLS modules available.
+
 =cut
 
 sub _build_workbook {

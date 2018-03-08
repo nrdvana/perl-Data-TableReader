@@ -48,6 +48,14 @@ is not seekable this may return undef.
 
 =head1 METHODS
 
+=head2 new
+
+  $iter= Data::TableReader::Iterator->new( \&coderef, \%fields );
+
+The iterator is a blessed coderef.  The first argument is the coderef to be blessed,
+and the second argument is the magic hashref of fields to be made available as
+C<< $iter->_fields >>.
+
 =head2 tell
 
 If seeking is supported, this will return some value that can be passed to

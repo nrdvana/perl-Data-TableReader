@@ -119,6 +119,10 @@ and potentially capture blank-header columns that might not be part of the array
 it must follow a column named 'scores' there's no ambiguity; you get exactly any column
 starting from the header C<'Scores'> until a column of any other header.
 
+=head2 follows_list
+
+Convenience accessor for C<< @{ ->follows } >>.
+
 =cut
 
 has name     => ( is => 'ro', required => 1 );
