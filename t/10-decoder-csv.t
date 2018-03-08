@@ -3,16 +3,19 @@ use strict;
 use warnings;
 use Test::More;
 use Try::Tiny;
+use Log::Any '$log';
+use Log::Any::Adapter 'TAP';
 use Data::TableReader::Decoder::CSV;
  
 plan skip_all => 'Need a CSV parser for this test'
 	unless try { Data::TableReader::Decoder::CSV->default_csv_module };
+my $log_fn= sub { $log->can($_[0])->($log, $_[1]) };
 
 sub test_basic {
 	my $input= ascii();
 	open my $input_fh, '<', \$input or die;
 	my $d= new_ok( 'Data::TableReader::Decoder::CSV',
-		[ file_name => '', file_handle => $input_fh, log => sub {} ],
+		[ file_name => '', file_handle => $input_fh, _log => $log_fn ],
 		'CSV decoder' );
 
 	ok( my $iter= $d->iterator, 'got iterator' );
@@ -30,7 +33,7 @@ sub test_multi_iterator {
 	my $input= ascii();
 	open my $input_fh, '<', \$input or die;
 	my $d= new_ok( 'Data::TableReader::Decoder::CSV',
-		[ file_name => '', file_handle => $input_fh, log => sub {} ],
+		[ file_name => '', file_handle => $input_fh, _log => $log_fn ],
 		'CSV decoder' );
 
 	ok( my $iter= $d->iterator, 'create first iterator' );
@@ -49,7 +52,7 @@ sub test_utf_bom {
 			my $input= main->$input_fn;
 			open my $input_fh, '<', \$input or die;
 			my $d= new_ok( 'Data::TableReader::Decoder::CSV',
-				[ file_name => '', file_handle => $input_fh, log => sub {} ],
+				[ file_name => '', file_handle => $input_fh, _log => $log_fn ],
 				"CSV decoder for $input_fn" );
 			ok( my $iter= $d->iterator, 'got iterator' );
 			like( $iter->()[0], qr/^\x{FFFD}?test$/, 'first row' );
@@ -71,7 +74,7 @@ sub test_utf_bom {
 			print $out_fh $input or die "print(pipe_out): $!";
 			close $out_fh or die "close: $!";
 			my $d= new_ok( 'Data::TableReader::Decoder::CSV',
-				[ file_name => '', file_handle => $input_fh, log => sub {} ],
+				[ file_name => '', file_handle => $input_fh, _log => $log_fn ],
 				"CSV decoder for $input_fn" );
 			if ($input_fn =~ /deceptive/) {
 				# Some inputs on non-seekable file handles will result in this exception.

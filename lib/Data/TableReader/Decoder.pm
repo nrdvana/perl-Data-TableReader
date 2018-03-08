@@ -22,13 +22,6 @@ Set by TableReader.  Useful for logging.
 
 Set by TableReader.  This is what the iterator should parse.
 
-=head2 log
-
-Set by TableReader.  Unlike the attribute of the same name on
-TableReader, this is always a coderef, to be called as:
-
-  $log->($level, $message);
-
 =head1 METHODS
 
 =head2 iterator
@@ -45,6 +38,7 @@ equivalent to the perl syntax
 
 has file_name   => ( is => 'ro', required => 1 );
 has file_handle => ( is => 'ro', required => 1 );
-has log         => ( is => 'ro', required => 1 );
+has _log        => ( is => 'ro', required => 1 );
+*log= *_log; # back-compat, but deprecated since it doesn't match ->log on TableReader
 
 1;
