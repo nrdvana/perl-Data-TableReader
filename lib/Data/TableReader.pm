@@ -251,7 +251,8 @@ sub _build__file_handle {
 	my $self= shift;
 	my $i= $self->input;
 	return $i if ref($i) && (ref($i) eq 'GLOB' or ref($i)->can('read'));
-	open(my $fh, '<:raw', $i) or croak "open($i): $!";
+	open(my $fh, '<', $i) or croak "open($i): $!";
+	binmode $fh;
 	return $fh;
 }
 
