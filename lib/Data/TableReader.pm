@@ -919,3 +919,8 @@ sub Data::TableReader::_RecIter::next_dataset {
 }
 
 1;
+
+=head1 THANKS
+
+Portions of this software were funded by L<Ellis, Partners in Management Solutions|http://www.epmsonline.com/>.
+
