@@ -386,15 +386,17 @@ sub detect_input_format {
 		my $fh= $self->_file_handle;
 		# Need to be able to seek.
 		if (seek($fh, 0, 1)) {
+			$fpos= tell $fh;
 			read($fh, $magic, 4096);
 			seek($fh, $fpos, 0) or croak "seek: $!";
 		}
 		elsif ($fh->can('ungets')) {
+			$fpos= 0; # to indicate that we did try reading the file
 			read($fh, $magic, 4096);
 			$fh->ungets($magic);
 		}
 		else {
-			$self->_log('notice',"Can't fully detect input format because handle is not seekable."
+			$self->_log->('notice',"Can't fully detect input format because handle is not seekable."
 				." Consider fully buffering the file, or using FileHandle::Unget");
 			$magic= '';
 		}
@@ -412,19 +414,20 @@ sub detect_input_format {
 	# Else probe some more...
 	$self->_log->('debug',"Probing file format because no filename suffix");
 	length $magic or croak "Can't probe format. No filename suffix, and "
-		.($fpos >= 0? "unseekable file handle" : "no content");
+		.(!defined $fpos? "unseekable file handle" : "no content");
 
 	my ($probably_csv, $probably_tsv)= (0,0);
-	++$probably_csv if $magic =~ /^["']?[\w ]+["']?,/;
-	++$probably_tsv if $magic =~ /^["']?[\w ]+["']?\t/;
-	my $comma_count= ($magic =~ /,/g);
-	my $tab_count= ($magic =~ /\t/g);
-	my $eol_count= ($magic =~ /\n/g);
+	++$probably_csv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[\w ]+["']?,/;
+	++$probably_tsv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[\w ]+["']?\t/;
+	my $comma_count= () = ($magic =~ /,/g);
+	my $tab_count= () = ($magic =~ /\t/g);
+	my $eol_count= () = ($magic =~ /\n/g);
 	++$probably_csv if $comma_count > $eol_count and $comma_count > $tab_count;
 	++$probably_tsv if $tab_count > $eol_count and $tab_count > $comma_count;
+	$self->_log->('debug', 'probe results: comma_count=%d tab_count=%d eol_count=%d probably_csv=%d probably_tsv=%d',
+		$comma_count, $tab_count, $eol_count, $probably_csv, $probably_tsv);
 	return 'CSV' if $probably_csv and $probably_csv > $probably_tsv;
 	return 'TSV' if $probably_tsv and $probably_tsv > $probably_csv;
-
 	croak "Can't determine file format";
 }
 
