@@ -23,18 +23,26 @@ This is an instance of L<Spreadsheet::ParseExcel>, L<Spreadsheet::ParseXLSX>,
 or L<Spreadsheet::XLSX> (which all happen have the same API).  Subclasses can
 lazy-build this from the C<file_handle>.
 
-=cut
-
-has workbook => ( is => 'lazy' );
-
 =head2 sheet
 
 This is either a sheet name, a regex for matching a sheet name, or a parser's
 worksheet object.  It is also optional; if not set, all sheets will be iterated.
 
+=head2 xls_formatter
+
+An optional object that is passed to Excel parsers L<Spreadsheet::ParseXLSX> and
+L<Spreadsheet::ParseExcel>. It governs how raw data in cells is formatted into
+values depending on the type of the cell. The parsers create one of their own if
+none is provided, usually L<Spreadsheet::ParseExcel::FmtDefault>.
+
+Note that it does not work for Spreadsheet::XLSX, which hardcodes the formatter
+as Spreadsheet::XLSX::Fmt2007.
+
 =cut
 
+has workbook => ( is => 'lazy' );
 has sheet => ( is => 'ro' );
+has xls_formatter => ( is => 'rw' );
 
 # Arrayref of all sheets we can search
 has _sheets => ( is => 'lazy' );

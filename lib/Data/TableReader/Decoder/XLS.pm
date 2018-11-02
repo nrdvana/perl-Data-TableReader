@@ -40,7 +40,7 @@ sub _build_workbook {
 	if (ref $f and ref($f)->can('worksheets')) {
 		$wbook= $f;
 	} else {
-		$wbook= $self->default_xls_module->new->parse($f);
+		$wbook= $self->default_xls_module->new->parse($f, $self->xls_formatter);
 	}
 	defined $wbook or croak "Can't parse file '".$self->file_name."'";
 	return $wbook;
