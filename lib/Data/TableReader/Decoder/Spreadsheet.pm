@@ -65,12 +65,20 @@ sub _build__sheets {
 	return \@sheets;
 }
 
+sub _oo_rowmax_fix {    # openoffice saves bogus rowmax, try and fix
+    my ($s, $rowmax)= @_;
+    my $final_row_max= ($s and ref $s->{Cells} eq "ARRAY" and $#{$s->{Cells}} < $rowmax)    #
+      ? $#{$s->{Cells}} : $rowmax;
+    return $final_row_max;
+}
+
 sub iterator {
 	my $self= shift;
 	my $sheets= $self->_sheets;
 	my $sheet= $sheets->[0];
 	my ($colmin, $colmax)= $sheet? $sheet->col_range() : (0,-1);
 	my ($rowmin, $rowmax)= $sheet? $sheet->row_range() : (0,-1);
+	$rowmax= _oo_rowmax_fix $sheet, $rowmax;
 	my $row= $rowmin-1;
 	Data::TableReader::Decoder::Spreadsheet::_Iter->new(
 		sub {
@@ -130,6 +138,7 @@ sub Data::TableReader::Decoder::Spreadsheet::_Iter::seek {
 	my $sheet= $f->{sheets}[$sheet_idx];
 	my ($colmin, $colmax)= $sheet? $sheet->col_range() : (0,-1);
 	my ($rowmin, $rowmax)= $sheet? $sheet->row_range() : (0,-1);
+	$rowmax= _oo_rowmax_fix $sheet, $rowmax;
 	$row= $rowmin-1 unless defined $row;
 	$f->{sheet_idx}= $sheet_idx;
 	${$f->{sheet_ref}}= $sheet;
