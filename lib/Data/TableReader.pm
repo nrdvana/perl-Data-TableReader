@@ -372,14 +372,7 @@ or is installed; it might just echo the file extension back to you.
 
 sub detect_input_format {
 	my ($self, $filename, $magic)= @_;
-	# Detect filename if not supplied
-	if (!defined $filename) {
-		my $input= $self->input;
-		$filename= '';
-		$filename= "$input" if defined $input and (!ref $input || ref($input) =~ /path|file/i);
-	}
-	my ($suffix)= ($filename =~ /\.([^.]+)$/);
-	$suffix= defined $suffix? uc($suffix) : '';
+
 	# Load first block of file, unless supplied
 	my $fpos;
 	if (!defined $magic) {
@@ -409,6 +402,16 @@ sub detect_input_format {
 
 	# Else trust the file extension, because TSV with commas can be very similar to CSV with
 	# tabs in the data.
+    my $suffix = do {
+        # Detect filename if not supplied
+        if (!defined $filename) {
+            my $input= $self->input;
+            $filename= '';
+            $filename= "$input" if defined $input and (!ref $input || ref($input) =~ /path|file/i);
+        }
+        my ($suffix)= ($filename =~ /\.([^.]+)$/);
+        defined $suffix? uc($suffix) : '';
+    };
 	return $suffix if length $suffix;
 
 	# Else probe some more...
