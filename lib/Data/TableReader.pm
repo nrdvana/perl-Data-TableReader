@@ -262,29 +262,30 @@ sub _build__file_handle {
 sub _build_decoder {
 	my $self= shift;
 	my $decoder_arg= $self->_decoder_arg;
+	my $decoder_ref= ref $decoder_arg;
 	my ($class, @args);
 	if (!$decoder_arg) {
 		($class, @args)= $self->detect_input_format;
 		$self->_log->('trace', "Detected input format as %s", $class);
 	}
-	elsif (!ref $decoder_arg) {
+	elsif (!$decoder_ref) {
 		$class= $decoder_arg;
 	}
-	elsif (ref $decoder_arg eq 'HASH') {
+	elsif ($decoder_ref eq 'HASH') {
 		my %tmp= %$decoder_arg;
 		$class= delete $tmp{CLASS};
 		($class, @args)= $self->detect_input_format if !$class;
 		croak "require ->{CLASS} in decoder arguments" if !$class;
 		@args= (@args, %tmp);
 	}
-	elsif (ref $decoder_arg eq 'ARRAY') {
+	elsif ($decoder_ref eq 'ARRAY') {
 		($class, @args)= @$decoder_arg;
 	}
-	elsif (ref($decoder_arg)->can('iterator')) {
+	elsif ($decoder_ref->can('iterator')) {
 		return $decoder_arg;
 	}
 	else {
-		croak "Can't create decoder from ".ref($decoder_arg);
+		croak "Can't create decoder from $decoder_ref";
 	}
 	$class= "Data::TableReader::Decoder::$class"
 		unless $class =~ /::/;
