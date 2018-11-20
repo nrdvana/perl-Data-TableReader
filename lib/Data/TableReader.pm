@@ -64,9 +64,10 @@ feedback about the validity of the data file.
 
 =head2 input
 
-This can be a file name or L<Path::Class> instance or file handle.  If a file
-handle, it must be seekable in order to auto-detect the file format, I<or> you
-may specify the decoder directly to avoid auto-detection.
+This can be a file name or L<Path::Class> instance or file handle or a
+L<Spreadsheet::ParseExcel::Worksheet> object.  If a file handle, it must be
+seekable in order to auto-detect the file format, I<or> you may specify the
+decoder directly to avoid auto-detection.
 
 =head2 decoder
 
@@ -250,6 +251,7 @@ has log                 => ( is => 'rw', trigger => sub { shift->_clear_log } );
 sub _build__file_handle {
 	my $self= shift;
 	my $i= $self->input;
+	return undef if ref($i) && (ref($i) eq "Spreadsheet::ParseExcel::Worksheet");
 	return $i if ref($i) && (ref($i) eq 'GLOB' or ref($i)->can('read'));
 	open(my $fh, '<', $i) or croak "open($i): $!";
 	binmode $fh;
@@ -289,7 +291,7 @@ sub _build_decoder {
 	require_module($class) or croak "$class does not exist or is not installed";
 	$self->_log->('trace', 'Creating decoder %s on input %s', $class, $self->input);
 	return $class->new(
-		file_name   => ($self->input eq $self->_file_handle? '' : $self->input),
+		file_name   => ($self->input eq ($self->_file_handle||"") ? '' : $self->input),
 		file_handle => $self->_file_handle,
 		_log        => $self->_log,
 		@args
@@ -373,6 +375,10 @@ or is installed; it might just echo the file extension back to you.
 sub detect_input_format {
 	my ($self, $filename, $magic)= @_;
 
+	my $input= $self->input;
+	return ('XLSX', sheet => $input)
+		if ref($input) && (ref($input) eq "Spreadsheet::ParseExcel::Worksheet");
+
 	# Load first block of file, unless supplied
 	my $fpos;
 	if (!defined $magic) {
@@ -405,7 +411,6 @@ sub detect_input_format {
     my $suffix = do {
         # Detect filename if not supplied
         if (!defined $filename) {
-            my $input= $self->input;
             $filename= '';
             $filename= "$input" if defined $input and (!ref $input || ref($input) =~ /path|file/i);
         }
