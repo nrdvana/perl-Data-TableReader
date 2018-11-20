@@ -75,6 +75,11 @@ This is either an instance of L<Data::TableReader::Decoder>, or a class name,
 or a partial class name to be appended as C<"Data::TableReader::Decoder::$name">
 or an arrayref or hashref of arguments to build the decoder.
 
+In an arrayref the first argument can be undef, and in a hashref the CLASS
+argument can be missing or undef. In those cases it will be detected from the
+input attribute and any default arguments combined with (and if necessary
+trumped by) the extra arguments in the arrayref or hashref.
+
 Examples:
 
   'CSV'
@@ -271,15 +276,17 @@ sub _build_decoder {
 	elsif (!$decoder_ref) {
 		$class= $decoder_arg;
 	}
-	elsif ($decoder_ref eq 'HASH') {
-		my %tmp= %$decoder_arg;
-		$class= delete $tmp{CLASS};
-		($class, @args)= $self->detect_input_format if !$class;
-		croak "require ->{CLASS} in decoder arguments" if !$class;
-		@args= (@args, %tmp);
-	}
-	elsif ($decoder_ref eq 'ARRAY') {
-		($class, @args)= @$decoder_arg;
+	elsif ($decoder_ref eq "HASH" or $decoder_ref eq "ARRAY") {
+		($class, @args)= $decoder_ref eq "ARRAY"? @$decoder_arg : do {
+			my %tmp= %$decoder_arg;
+			(delete($tmp{CLASS}), %tmp);
+		};
+		if(!$class) {
+			my ($input_class, @input_args)= $self->detect_input_format;
+			croak "decoder class not in arguments and unable to identify decoder class from input"
+				if !$input_class;
+			($class, @args)= ($input_class, @input_args, @args);
+		}
 	}
 	elsif ($decoder_ref->can('iterator')) {
 		return $decoder_arg;
