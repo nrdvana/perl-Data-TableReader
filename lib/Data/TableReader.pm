@@ -272,10 +272,10 @@ sub _build_decoder {
 	}
 	elsif (ref $decoder_arg eq 'HASH') {
 		my %tmp= %$decoder_arg;
-		$class= delete $tmp{CLASS}
-			or ($class)= $self->detect_input_format
-			or croak "require ->{CLASS} in decoder arguments";
-		@args= %tmp;
+		$class= delete $tmp{CLASS};
+		($class, @args)= $self->detect_input_format if !$class;
+		croak "require ->{CLASS} in decoder arguments" if !$class;
+		@args= (@args, %tmp);
 	}
 	elsif (ref $decoder_arg eq 'ARRAY') {
 		($class, @args)= @$decoder_arg;
