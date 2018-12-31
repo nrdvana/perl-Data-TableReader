@@ -154,7 +154,7 @@ sub _build_header_regex {
 		$h =~ s/_/ /g;                              # then split on underscore
 	}
 	return $h if ref($h) eq 'Regexp';
-	my $pattern= join "[\\W_]*", map "\Q$_\E", grep { defined && length }
+	my $pattern= join "[\\W_]*", map { $_ eq "\n"? '\n' : "\Q$_\E" } grep { defined && length }
 		split /(\n)|\s+|(\W)/, $h; # capture newline or non-word, except for other whitespace
 	return qr/^[\W_]*$pattern[\W_]*$/im;
 }

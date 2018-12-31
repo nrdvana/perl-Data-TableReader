@@ -335,7 +335,7 @@ sub _build_field_by_name {
 sub _build_header_row_combine {
 	my $self= shift;
 	# If headers contain "\n", we need to collect multiple cells per column
-	max map { 1+($_->header_regex =~ /\\n/g) } $self->field_list;
+	max map { 1+(()= ($_->header_regex =~ /\\n|\n/g)) } $self->field_list;
 }
 
 # 'log' can be a variety of things, but '_log' will always be a coderef
@@ -571,7 +571,7 @@ sub _find_table_in_dataset {
 		}
 		if ($row_accum > 1) {
 			push @rows, $vals;
-			splice @rows, 0, @rows-$row_accum; # only need to retain $row_accum number of rows
+			shift @rows while @rows > $row_accum;
 			$vals= [ map { my $c= $_; join("\n", map $_->[$c], @rows) } 0 .. $#{$rows[-1]} ];
 			$stash->{context}= $row_accum.' rows ending at '.$data_iter->position;
 		} else {
