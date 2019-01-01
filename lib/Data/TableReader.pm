@@ -384,8 +384,11 @@ sub detect_input_format {
 	my ($self, $filename, $magic)= @_;
 
 	my $input= $self->input;
+	# As convenience to spreadsheet users, let input be a parsed workbook/worksheet object.
 	return ('XLSX', sheet => $input)
-		if ref($input) && (ref($input) eq "Spreadsheet::ParseExcel::Worksheet");
+		if ref($input) && ref($input)->can('get_cell');
+	return ('XLSX', workbook => $input)
+		if ref($input) && ref($input)->can('worksheets');
 
 	# Load first block of file, unless supplied
 	my $fpos;
@@ -415,23 +418,27 @@ sub detect_input_format {
 	return ( 'XLS'  ) if $magic =~ /^\xD0\xCF\x11\xE0/;
 
 	# Else trust the file extension, because TSV with commas can be very similar to CSV with
-	# tabs in the data.
-    my $suffix = do {
-        # Detect filename if not supplied
-        if (!defined $filename) {
-            $filename= '';
-            $filename= "$input" if defined $input and (!ref $input || ref($input) =~ /path|file/i);
-        }
-        my ($suffix)= ($filename =~ /\.([^.]+)$/);
-        defined $suffix? uc($suffix) : '';
-    };
-	return $suffix if length $suffix;
+	# tabs in the data, and some crazy person might store an HTML document as the first element
+	# of a CSV file.
+	# Detect filename if not supplied
+	if (!defined $filename) {
+		$filename= '';
+		$filename= "$input" if defined $input and (!ref $input || ref($input) =~ /path|file/i);
+	}
+	if ($filename =~ /\.([^.]+)$/) {
+		my $suffix= uc($1);
+		return 'HTML' if $suffix eq 'HTM';
+		return $suffix;
+	}
 
 	# Else probe some more...
 	$self->_log->('debug',"Probing file format because no filename suffix");
 	length $magic or croak "Can't probe format. No filename suffix, and "
 		.(!defined $fpos? "unseekable file handle" : "no content");
 
+	# HTML is pretty obvious
+	return 'HTML' if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?<(!DOCTYPE )HTML/i;
+	# Else guess between CSV and TSV
 	my ($probably_csv, $probably_tsv)= (0,0);
 	++$probably_csv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[\w ]+["']?,/;
 	++$probably_tsv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[\w ]+["']?\t/;
