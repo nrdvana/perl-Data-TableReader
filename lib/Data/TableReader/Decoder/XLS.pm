@@ -7,10 +7,8 @@ extends 'Data::TableReader::Decoder::Spreadsheet';
 our @xls_probe_modules= qw( Spreadsheet::ParseExcel );
 our $default_xls_module;
 sub default_xls_module {
-	$default_xls_module ||= do {
-		eval "require $_" && return $_ for @xls_probe_modules;
-		croak "No XLS parser available; install one of: ".join(', ', @xls_probe_modules);
-	};
+	$default_xls_module ||=
+		Data::TableReader::Decoder::_first_sufficient_module('XLS parser', \@xls_probe_modules);
 }
 
 # ABSTRACT: Access sheets/rows of a Microsoft Excel '97 workbook

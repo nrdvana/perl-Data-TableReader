@@ -41,4 +41,16 @@ has file_handle => ( is => 'ro', required => 1 );
 has _log        => ( is => 'ro', required => 1 );
 *log= *_log; # back-compat, but deprecated since it doesn't match ->log on TableReader
 
+sub _first_sufficient_module {
+	my ($name, $modules, $req_versions)= @_;
+	require Module::Runtime;
+	for my $mod (@$modules) {
+		my ($pkg, $ver)= ref $mod eq 'ARRAY'? @$mod : ( $mod, 0 );
+		return $pkg if Module::Runtime::use_module($pkg, $ver);
+	}
+	require Carp;
+	Carp::croak "No $name available (or of sufficient version); install one of: "
+		.join(', ', map +(ref $_ eq 'ARRAY'? "$_->[0] >= $_->[1]" : $_), @$modules);
+}
+
 1;

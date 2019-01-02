@@ -8,10 +8,8 @@ extends 'Data::TableReader::Decoder::Spreadsheet';
 our @xlsx_probe_modules= qw( Spreadsheet::ParseXLSX Spreadsheet::XLSX );
 our $default_xlsx_module;
 sub default_xlsx_module {
-	$default_xlsx_module ||= do {
-		eval "require $_" && return $_ for @xlsx_probe_modules;
-		croak "No XLSX parser available; install one of: ".join(', ', @xlsx_probe_modules);
-	};
+	$default_xlsx_module ||=
+		Data::TableReader::Decoder::_first_sufficient_module('XLSX parser', \@xlsx_probe_modules);
 }
 
 # ABSTRACT: Access sheets/rows of a modern Microsoft Excel workbook
