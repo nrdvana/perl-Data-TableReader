@@ -54,7 +54,7 @@ sub _parse_html_tables {
 		my ($tagname, $attr)= (uc $_[0], $_[1]);
 		if ($tagname eq 'TABLE') {
 			if ($cur_table) {
-				carp "Warning: tables within tables are currently ignored";
+				$self->_log->('warn','tables within tables are currently returned as a single cell value');
 				$nested_tables++;
 				$ignore_all++;
 			}
@@ -63,14 +63,14 @@ sub _parse_html_tables {
 			}
 		}
 		elsif ($tagname eq 'TR') {
-			$cur_table or croak "found <tr> outside any <table>\n";
-			$cur_row and carp "found <tr> before end of previous row\n";
+			$cur_table or croak "found <tr> outside any <table>";
+			$cur_row and $self->_log->('warn', 'found <tr> before end of previous row');
 			push @$cur_table, ($cur_row= []);
 		}
 		elsif ($tagname eq 'TD' or $tagname eq 'TH') {
-			$cur_table or croak "found <$tagname> outside any <table>\n";
-			$cur_row or croak "found <$tagname> outside any <tr>\n";
-			$cur_cell and carp "found <$tagname> before previous </$tagname>\n";
+			$cur_table or croak "found <$tagname> outside any <table>";
+			$cur_row or croak "found <$tagname> outside any <tr>";
+			$cur_cell and $self->_log->('warn', "found <$tagname> before previous </$tagname>");
 			push @$cur_row, '';
 			$cur_cell= \$cur_row->[-1];
 		}
@@ -81,7 +81,7 @@ sub _parse_html_tables {
 			$$cur_cell .= $text
 		}
 		elsif ($cur_row && $text =~ /\S/) {
-			carp "Encountered text within a row but not in a cell: '$text'\n";
+			$self->_log->('warn', "Encountered text within a row but not in a cell: '$text'");
 		}
 	};
 	my $tag_end= sub {
@@ -93,19 +93,19 @@ sub _parse_html_tables {
 			}
 		}
 		elsif ($tagname eq 'TD' or $tagname eq 'TH') {
-			$cur_cell or carp "Found </$tagname> without matching <$tagname>\n";
+			$cur_cell or $self->_log->('warn', "Found </$tagname> without matching <$tagname>");
 			$cur_cell= undef;
 		}
 		elsif ($tagname eq 'TR') {
-			$cur_row or carp "Found </tr> without matching <tr>\n";
-			$cur_cell and carp "Found </tr> while still in <td>\n";
+			$cur_row or $self->_log->('warn', "Found </tr> without matching <tr>");
+			$cur_cell and $self->_log->('warn', "Found </tr> while still in <td>");
 			$cur_row= undef;
 			$cur_cell= undef;
 		}
 		elsif ($tagname eq 'TABLE') {
-			$cur_table or carp "Found </table> without matching <table>\n";
-			$cur_row and carp "Found </table> while still in <tr>\n";
-			$cur_cell and carp "Found </table> while still in <td>\n";
+			$cur_table or $self->_log->('warn', "Found </table> without matching <table>");
+			$cur_row and $self->_log->('warn', "Found </table> while still in <tr>");
+			$cur_cell and $self->_log->('warn', "Found </table> while still in <td>");
 			$cur_table= undef;
 			$cur_row= undef;
 			$cur_cell= undef;
@@ -119,7 +119,7 @@ sub _parse_html_tables {
 		end_h   => [ $tag_end, 'tagname' ]
 	)->parse_file($handle);
 	
-	$nested_tables == 0 or carp "Found EOF while expecting </table> tag\n";
+	$nested_tables == 0 or $self->_log->('warn', "Found EOF while expecting </table> tag");
 	return \@tables;
 }
 
