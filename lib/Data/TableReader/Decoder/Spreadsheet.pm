@@ -20,7 +20,7 @@ See attributes from parent class: L<Data::TableReader::Decoder>.
 =head2 workbook
 
 This is an instance of L<Spreadsheet::ParseExcel>, L<Spreadsheet::ParseXLSX>,
-or L<Spreadsheet::XLSX> (which all happen have the same API).  Subclasses can
+or L<Spreadsheet::XLSX> (which all happen to have the same API).  Subclasses can
 lazy-build this from the C<file_handle>.
 
 =head2 sheet

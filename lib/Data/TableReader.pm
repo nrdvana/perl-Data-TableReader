@@ -31,11 +31,11 @@ but there's plenty of options to choose from...
     
     # We want these fields to exist in the file (identified by headers)
     fields => [
-      { name => 'address', header => qw/street|address/i },
+      { name => 'address', header => qr/street|address/i },
       'city',
       'state',
       # can validate with Type::Tiny classes
-      { name => 'zip', header => qw/zip\b|postal/i, type => US_Zipcode },
+      { name => 'zip', header => qr/zip\b|postal/i, type => US_Zipcode },
     ],
     
     # Our data provider is horrible; just ignore any nonsense we encounter
@@ -52,13 +52,13 @@ but there's plenty of options to choose from...
 
 =head1 DESCRIPTION
 
-This module is designed to be a useful for anyone who needs to take "loose"
-or "dirty" tabular data sources (such as Excel, CSV, TSV, or HTML) which may
-have been edited by non-technical humans and extract the data into sanitized
-records, while also verifying that the data file contains roughly the schema
-you were expecting.  It is primarily intended for making automated imports
-of data from non-automated or unstable sources, and providing human-readable
-feedback about the validity of the data file.
+This module is designed to take "loose" or "dirty" tabular data sources
+(such as Excel, CSV, TSV, or HTML) which may have been edited by non-technical
+humans and extract the data into sanitized records, while also verifying that
+the data file contains roughly the schema you were expecting.  It is primarily
+intended for making automated imports of data from non-automated or unstable
+sources, and providing human-readable feedback about the validity of the data
+file.
 
 =head1 ATTRIBUTES
 
@@ -93,9 +93,13 @@ Examples:
 
 =head2 fields
 
-An arrayref of L<Data::TableReader::Field> objects (or hashrefs to
-construct them with) which this module should search for within the tables
-(worksheets etc.) of L</input>.
+An arrayref of L<Data::TableReader::Field> objects which this module should
+search for within the tables (worksheets etc.) of L</input>.
+
+If an element of this array is a hashref or string, it will be coerced to an
+instance of L<Data::TableReader::Field>, with plain strings becoming the
+C<name> attribute.  See L<Data::TableReader::Field/header> for how names are
+automatically converted to the header-matching regex.
 
 =head2 record_class
 
