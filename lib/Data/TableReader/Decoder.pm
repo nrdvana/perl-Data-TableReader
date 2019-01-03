@@ -46,7 +46,7 @@ sub _first_sufficient_module {
 	require Module::Runtime;
 	for my $mod (@$modules) {
 		my ($pkg, $ver)= ref $mod eq 'ARRAY'? @$mod : ( $mod, 0 );
-		return $pkg if Module::Runtime::use_module($pkg, $ver);
+		return $pkg if eval { Module::Runtime::use_module($pkg, $ver) };
 	}
 	require Carp;
 	Carp::croak "No $name available (or of sufficient version); install one of: "
