@@ -1,5 +1,4 @@
 package Data::TableReader::Decoder::Spreadsheet;
-
 use Moo 2;
 use Carp 'croak';
 use IO::Handle;
@@ -7,6 +6,7 @@ use IO::Handle;
 extends 'Data::TableReader::Decoder';
 
 # ABSTRACT: Base class for implementing spreadsheet decoders
+# VERSION
 
 =head1 DESCRIPTION
 

@@ -1,5 +1,4 @@
 package Data::TableReader::Iterator;
-
 use strict;
 use warnings;
 use Try::Tiny;
@@ -7,6 +6,7 @@ use Carp;
 use Scalar::Util 'refaddr';
 
 # ABSTRACT: Base class for iterators (blessed coderefs)
+# VERSION
 
 =head1 SYNOPSIS
 

@@ -1,11 +1,11 @@
 package Data::TableReader::Decoder::TSV;
-
 use Moo 2;
 use Try::Tiny;
 use Carp;
 use Log::Any '$log';
 
 # ABSTRACT: Access rows of a tab-delimited text file
+# VERSION
 
 =head1 DESCRIPTION
 

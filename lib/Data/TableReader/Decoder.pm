@@ -1,8 +1,8 @@
 package Data::TableReader::Decoder;
-
 use Moo 2;
 
 # ABSTRACT: Base class for table decoders
+# VERSION
 
 =head1 DESCRIPTION
 

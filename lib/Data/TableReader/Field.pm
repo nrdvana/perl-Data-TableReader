@@ -1,9 +1,9 @@
 package Data::TableReader::Field;
-
 use Moo 2;
 use Carp ();
 
 # ABSTRACT: Field specification for Data::TableReader
+# VERSION
 
 =head1 DESCRIPTION
 

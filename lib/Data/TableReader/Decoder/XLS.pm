@@ -1,5 +1,4 @@
 package Data::TableReader::Decoder::XLS;
-
 use Moo 2;
 use Carp;
 extends 'Data::TableReader::Decoder::Spreadsheet';
@@ -12,6 +11,7 @@ sub default_xls_module {
 }
 
 # ABSTRACT: Access sheets/rows of a Microsoft Excel '97 workbook
+# VERSION
 
 =head1 DESCRIPTION
 

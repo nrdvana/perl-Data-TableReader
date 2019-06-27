@@ -1,5 +1,4 @@
 package Data::TableReader::Decoder::IdiotCSV;
-
 use Moo 2;
 use Try::Tiny;
 use Carp;
@@ -8,6 +7,7 @@ use Log::Any '$log';
 extends 'Data::TableReader::Decoder::CSV';
 
 # ABSTRACT: Access rows of a badly formatted comma-delimited text file
+# VERSION
 
 =head1 DESCRIPTION
 

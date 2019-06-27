@@ -1,5 +1,4 @@
 package Data::TableReader;
-
 use Moo 2;
 use Try::Tiny;
 use Carp;
@@ -9,6 +8,7 @@ use Data::TableReader::Field;
 use Data::TableReader::Iterator;
 
 # ABSTRACT: Extract records from "dirty" tabular data sources
+# VERSION
 
 =head1 SYNOPSIS
 

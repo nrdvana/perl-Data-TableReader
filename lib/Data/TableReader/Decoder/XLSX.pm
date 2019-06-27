@@ -1,5 +1,4 @@
 package Data::TableReader::Decoder::XLSX;
-
 use Moo 2;
 use Carp;
 use Try::Tiny;
@@ -13,6 +12,7 @@ sub default_xlsx_module {
 }
 
 # ABSTRACT: Access sheets/rows of a modern Microsoft Excel workbook
+# VERSION
 
 =head1 DESCRIPTION
 
