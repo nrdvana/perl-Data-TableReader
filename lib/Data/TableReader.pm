@@ -784,7 +784,7 @@ sub iterator {
 	my @row_slice; # one column index per field, and possibly more for array_val_map
 	my @arrayvals; # list of source index and destination index for building array values
 	my @field_names; # ordered list of field names where row slice should be assigned
-	my @trim_idx;  # list of array indicies which should be whitespace-trimmed.
+	my %trimmer;   # list of trim functions and the array indicies they should be applied to
 	my @blank_val; # blank value per each fetched column
 	my @type_check;# list of 
 	my $class;     # optional object class for the resulting rows
@@ -812,7 +812,10 @@ sub iterator {
 	for (0 .. $#row_slice) {
 		if (!ref $row_slice[$_]) {
 			my $field= $col_map->[$row_slice[$_]];
-			push @trim_idx, $_ if $field->trim;
+			if (my $t= $field->trim_coderef) {
+				$trimmer{$t} ||= [ $t, [] ];
+				push @{ $trimmer{$t}[1] }, $_;
+			}
 			push @blank_val, $field->blank;
 			push @type_check, $self->_make_validation_callback($field, $_)
 				if $field->type;
@@ -827,13 +830,17 @@ sub iterator {
 			push @arrayvals, [ $_, $from, scalar @$src ];
 			for ($from .. $#row_slice) {
 				my $field= $col_map->[$row_slice[$_]];
-				push @trim_idx, $_ if $field->trim;
+				if (my $t= $field->trim_coderef) {
+					$trimmer{$t} ||= [ $t, [] ];
+					push @{ $trimmer{$t}[1] }, $_;
+				}
 				push @blank_val, $field->blank;
 				push @type_check, $self->_make_validation_callback($field, $_)
 					if $field->type;
 			}
 		}
 	}
+	my @trim= values %trimmer;
 	@arrayvals= reverse @arrayvals;
 	my ($n_blank, $first_blank, $eof);
 	my $sub= sub {
@@ -842,9 +849,8 @@ sub iterator {
 		my $row= !$eof && $data_iter->(\@row_slice)
 			or ++$eof && return undef;
 		# Apply 'trim' to any column whose field requested it
-		for (grep { defined } @{$row}[@trim_idx]) {
-			$_ =~ s/\s+$//;
-			$_ =~ s/^\s+//;
+		for my $t (@trim) {
+			$t->[0]->() for grep defined, @{$row}[@{$t->[1]}];
 		}
 		# Apply 'blank value' to every column which is zero length
 		$n_blank= 0;
