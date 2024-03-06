@@ -91,6 +91,20 @@ returns a validation error message (undef if it is valid).
 This is an optional feature and there is no default.
 The behavior of a validation failure depends on the options to TableReader.
 
+=head2 coerce
+
+If C<type> validation fails, this gives you a second chance at fixing the field.  Set this to
+a true value to call C<< $field->type->coerce >> on the value, or set it to a coderef of the
+form C<< $coerced_value= $coerce->($value) >>.  Type validation will be attempted a second
+time on the coerced value, and if successful it replaces the original value.  If it fails, the
+original value remains in the record (and you can handle it how you like in the TableReader
+on_validation_failure callback).
+
+If you want to apply a coercion before the first type validation is attempted, you can put that
+logic into the L</trim> attribute.
+
+Note that validation/coercion is skipped entirely for blank values
+
 =head2 array
 
 Boolean of whether this field can be found multiple times in one table.  Default is B<false>.
@@ -147,9 +161,18 @@ has required => ( is => 'ro', default => sub { 1 } );
 has trim     => ( is => 'ro', default => sub { 1 } );
 has blank    => ( is => 'ro' ); # default is undef
 has type     => ( is => 'ro', isa => sub { ref $_[0] eq 'CODE' or $_[0]->can('validate') } );
+has coerce   => ( is => 'ro', isa => sub { ref $_[0] eq 'CODE' or !ref $_[0] } );
 has array    => ( is => 'ro' );
 has follows  => ( is => 'ro' );
 sub follows_list { my $f= shift->follows; ref $f? @$f : defined $f? ( $f ) : () }
+
+sub BUILD {
+   my $self= shift;
+   if ($self->coerce) {
+      Carp::croak "To coerce field ".$self->name.", either 'coerce' must be a coderef or 'type' must have a ->coerce method"
+         unless ref $self->coerce eq 'CODE' or (defined $self->type && ref($self->type)->can('coerce'));
+   }
+}
 
 =head2 header_regex
 

@@ -873,6 +873,7 @@ sub iterator {
 			$first_blank ||= $data_iter->position;
 			goto again;
 		} elsif ($first_blank) {
+			# At the end of a series of blank rows, run the callback to decide what to do
 			unless ($self->_handle_blank_row($first_blank, $data_iter->position)) {
 				$eof= 1;
 				return undef;
@@ -904,15 +905,26 @@ sub iterator {
 sub _make_validation_callback {
 	my ($self, $field, $index)= @_;
 	my $t= $field->type;
-	ref $t eq 'CODE'? sub {
-		my $e= $t->($_[0][$index]);
-		defined $e? ([ $field, $index, $e ]) : ()
+	my $c= $field->coerce;
+	$index =~ /^[0-9]+\Z/ or die "$index"; # sanity check for security, since using eval
+	# The validate can either be Type::Tiny or a coderef that inspects $_ and returns the error.
+	my $validate_fn= ref $t eq 'CODE'? '$t->'
+		: $t->can('validate')         ? '$t->validate'
+		: croak "Invalid type constraint $t on field ".$field->name;
+	# Coerce can either be Type::Tiny or a coderef that inspects $_[0] and returns the coerced value.
+	my $coerce_fn= ref $c eq 'CODE'? '$c->'
+		: $c && (!$t->can('has_coercions') || $t->has_coercions)? '$t->coerce'
+		: undef;
+	my $field_lvalue= '$_[0]['.$index.']';
+	my $code= 'sub { my $e= '.$validate_fn.'('.$field_lvalue.'); ';
+	if (defined $coerce_fn) {
+		$code .= 'if (defined $e) {'
+		      .  '  my $tmp= '.$coerce_fn.'('.$field_lvalue.');'
+		      .  '  ('.$field_lvalue.', $e)= ($tmp) unless defined '.$validate_fn.'($tmp);'
+		      .  '}';
 	}
-	: $t->can('validate')? sub {
-		my $e= $t->validate($_[0][$index]);
-		defined $e? ([ $field, $index, $e ]) : ()
-	}
-	: croak "Invalid type constraint $t on field ".$field->name;
+	$code .= 'defined $e? ([ $field, '.$index.', $e ]) : () }';
+	return eval($code) || die "error compiling validation callback: $@";
 }
 
 sub _handle_blank_row {
