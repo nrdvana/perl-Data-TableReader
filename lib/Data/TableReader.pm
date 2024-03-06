@@ -64,10 +64,12 @@ file.
 
 =head2 input
 
-This can be a file name or L<Path::Class> instance or file handle or a
-L<Spreadsheet::ParseExcel::Worksheet> object.  If a file handle, it must be
-seekable in order to auto-detect the file format, I<or> you may specify the
-decoder directly to avoid auto-detection.
+This can be a file name, L<Path::Class> instance, file handle, arrayref, or
+L<Spreadsheet::ParseExcel::Worksheet> object.  If you supply a file handle,
+it must be seekable in order to auto-detect the file format, I<or> you may
+specify the decoder directly to avoid auto-detection.  Arrayrefs are passed to
+the L<'Mock' decoder|Data::TableReader::Decoder::Mock> which just returns the
+data as-is.
 
 =head2 decoder
 
@@ -260,7 +262,10 @@ has log                 => ( is => 'rw', trigger => sub { shift->_clear_log } );
 sub _build__file_handle {
 	my $self= shift;
 	my $i= $self->input;
-	return undef if ref($i) && (ref($i) eq "Spreadsheet::ParseExcel::Worksheet");
+	return undef if ref($i) && (
+		ref($i) eq "Spreadsheet::ParseExcel::Worksheet"
+		or ref($i) eq 'ARRAY'
+	);
 	return $i if ref($i) && (ref($i) eq 'GLOB' or ref($i)->can('read'));
 	open(my $fh, '<', $i) or croak "open($i): $!";
 	binmode $fh;
@@ -393,6 +398,13 @@ sub detect_input_format {
 		if ref($input) && ref($input)->can('get_cell');
 	return ('XLSX', workbook => $input)
 		if ref($input) && ref($input)->can('worksheets');
+	if (ref($input) eq 'ARRAY') {
+		# if user supplied single table of data, wrap it in an array to make an array of tables.
+		$input= [ $input ]
+			if @$input && ref($input->[0]) eq 'ARRAY'
+			&& @{$input->[0]} && ref($input->[0][0]) ne 'ARRAY';
+		return ('Mock', datasets => $input);
+	}
 
 	# Load first block of file, unless supplied
 	my $fpos;

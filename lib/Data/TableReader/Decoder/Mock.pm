@@ -5,14 +5,14 @@ use IO::Handle;
 
 extends 'Data::TableReader::Decoder';
 
-# ABSTRACT: Mock decoder for test cases
+# ABSTRACT: Decoder that returns supplied data without decoding anything
 # VERSION
 
 =head1 SYNOPSIS
 
     decoder => {
       CLASS => 'Mock',
-      data => [
+      datasets => [
         [ # Data Set 0
            [ 1, 2, 3, 4, 5 ],
            ...
@@ -24,24 +24,58 @@ extends 'Data::TableReader::Decoder';
       ]
     }
 
+or
+
+    decoder => {
+      CLASS => 'Mock',
+      table => [
+         [ 1, 2, 3, 4, 5 ],
+         ...
+      ],
+    }
+
 This doesn't actually decode anything; it just returns verbatim rows of data from arrayrefs
-that you supply.
+that you supply.  You can provide one or multiple tables.  The 'table' constructor parameter
+is an alias for C<< datasets[0] >>.
 
 =head1 ATTRIBUTES
 
 See attributes from parent class: L<Data::TableReader::Decoder>.
 
-=head2 data
+=head2 datasets
 
-The verbatim data which will be returned by the iterator.
+The verbatim data which will be returned by the iterator.  This can be an array of tables, or
+one table itself.  A table must be composed of arrayrefs, and the cells of the table cannot
+themselves be arrayrefs.
 
 =cut
 
-has data => ( is => 'rw' );
+sub BUILDARGS {
+	my $args= $_[0]->next::method(@_[1..$#_]);
+	# back-compat with earlier versions
+	$args->{datasets}= delete $args->{data} if defined $args->{data};
+	# allow simple way for user to specify a single table
+	$args->{datasets}= [ delete $args->{table} ] if defined $args->{table};
+	$args;
+}
+
+has datasets => ( is => 'rw', isa => \&_arrayref_3_deep );
+*data= *datasets;
+
+sub _arrayref_3_deep {
+	ref $_[0] eq 'ARRAY' or return 'Not an arrayref';
+	return undef unless @{$_[0]};
+	ref $_[0][0] eq 'ARRAY' or return 'Not an arrayref of tables';
+	return undef unless @{$_[0][0]};
+	ref $_[0][0][0] eq 'ARRAY' or return 'Not an arrayref of tables of rows';
+	return undef unless @{$_[0][0][0]};
+	!ref $_[0][0][0][0] or return 'Expected plain scalar at ->[$dataset][$table][$cell] depth of arrayrefs';
+	undef;
+}
 
 sub iterator {
 	my $self= shift;
-	my $data= $self->data;
+	my $data= $self->datasets;
 	my $table= $data->[0];
 	my $colmax= $table? scalar(@{$table->[0]})-1 : -1;
 	my $rowmax= $table? $#$table : -1;
