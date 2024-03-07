@@ -990,7 +990,7 @@ sub Data::TableReader::_RecIter::seek {
 }
 sub Data::TableReader::_RecIter::next_dataset {
 	shift->_fields->{reader}->_log
-		->('warn',"Searching for supsequent table headers is not supported yet");
+		->('warn',"Searching for subsequent table headers is not supported yet");
 	return 0;
 }
 
@@ -998,5 +998,7 @@ sub Data::TableReader::_RecIter::next_dataset {
 
 =head1 THANKS
 
-Portions of this software were funded by L<Ellis, Partners in Management Solutions|http://www.epmsonline.com/>.
+Portions of this software were funded by
+L<Ellis, Partners in Management Solutions|http://www.epmsonline.com/>
+and L<Candela Corporation|https://www.candelacorp.com/>.
 

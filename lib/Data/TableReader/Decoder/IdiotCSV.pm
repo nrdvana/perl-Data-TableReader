@@ -11,13 +11,13 @@ extends 'Data::TableReader::Decoder::CSV';
 
 =head1 DESCRIPTION
 
-This decoder is like L<Data::TableReader::Decoder::CSV|::Decoder::CSV>, but can additionally
+This decoder is like L<::Decoder::CSV|Data::TableReader::Decoder::CSV>, but can additionally
 parse the garbage resulting from those special people who write "CSV Export" code
 that looks like
 
   print join(",", map qq{"$_"}, @record)."\n";
 
-(or rather the equivalent code in Visual Basic or PHP which is what they're
+(or rather, the equivalent code in Visual Basic or PHP which is what they're
 probably using)  regardless of their data containing quote characters or newlines,
 resulting in garbage like:
 
