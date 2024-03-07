@@ -69,7 +69,8 @@ sub _arrayref_3_deep {
 	return undef unless @{$_[0][0]};
 	ref $_[0][0][0] eq 'ARRAY' or return 'Not an arrayref of tables of rows';
 	return undef unless @{$_[0][0][0]};
-	!ref $_[0][0][0][0] or return 'Expected plain scalar at ->[$dataset][$table][$cell] depth of arrayrefs';
+	ref $_[0][0][0][0] ne 'ARRAY'
+		or return 'Expected plain cell value at ->[$dataset][$table][$cell] depth of arrayrefs';
 	undef;
 }
 
