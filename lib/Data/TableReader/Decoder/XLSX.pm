@@ -4,7 +4,7 @@ use Carp;
 use Try::Tiny;
 extends 'Data::TableReader::Decoder::Spreadsheet';
 
-our @xlsx_probe_modules= qw( Spreadsheet::ParseXLSX Spreadsheet::XLSX );
+our @xlsx_probe_modules= ( [ 'Spreadsheet::ParseXLSX', '0.30' ], 'Spreadsheet::XLSX' );
 our $default_xlsx_module;
 sub default_xlsx_module {
 	$default_xlsx_module ||=

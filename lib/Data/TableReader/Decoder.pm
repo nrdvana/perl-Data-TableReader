@@ -46,7 +46,15 @@ sub _first_sufficient_module {
 	require Module::Runtime;
 	for my $mod (@$modules) {
 		my ($pkg, $ver)= ref $mod eq 'ARRAY'? @$mod : ( $mod, 0 );
-		return $pkg if eval { Module::Runtime::use_module($pkg, $ver) };
+		next unless eval { Module::Runtime::use_module($pkg, $ver) };
+		# Special case for Excel modules that use Archive::Zip and don't declare proper
+		# version requirements for it:
+		# https://github.com/MichaelDaum/spreadsheet-parsexlsx/pull/12
+		if ($pkg =~ /XLSX/ && !eval { Module::Runtime::use_module('Archive::Zip', 1.34) }) {
+			Carp::carp("Your version of Archive::Zip is not new enough to make use of $pkg");
+			next;
+		}
+		return $pkg
 	}
 	require Carp;
 	Carp::croak "No $name available (or of sufficient version); install one of: "

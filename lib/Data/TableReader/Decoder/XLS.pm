@@ -3,7 +3,7 @@ use Moo 2;
 use Carp;
 extends 'Data::TableReader::Decoder::Spreadsheet';
 
-our @xls_probe_modules= qw( Spreadsheet::ParseExcel );
+our @xls_probe_modules= ( [ 'Spreadsheet::ParseExcel', '0.66' ] );
 our $default_xls_module;
 sub default_xls_module {
 	$default_xls_module ||=
