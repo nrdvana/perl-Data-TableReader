@@ -22,7 +22,7 @@ use Data::TableReader::Iterator;
     )
     ->iterator->all;
 
-but there's plenty of options to choose from...
+but there are plenty of options to choose from...
 
   my $tr= Data::TableReader->new(
     # path or file handle

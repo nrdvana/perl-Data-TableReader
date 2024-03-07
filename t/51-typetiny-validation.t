@@ -5,7 +5,7 @@ use Test::More;
 use Try::Tiny;
 use File::Spec::Functions 'catfile';
 use Log::Any '$log';
-use Log::Any::Adapter 'TAP';
+use Log::Any::Adapter 'TAP', filter => 'warn';
 
 use_ok( 'Data::TableReader' ) or BAIL_OUT;
 
