@@ -14,10 +14,9 @@ sub is_num { $_[0] =~ /^[0-9]+$/? undef : 'not numeric' }
 
 # Find fields in the exact order they are present in the file
 subtest validation_die => sub {
-	open(my $csv, '<', \"X\nabc\n123\ndef\n") or die;
 	my @log;
 	my $tr= new_ok( 'Data::TableReader', [
-			input => $csv, decoder => 'CSV',
+			input => [ ['X'], ['abc'], ['123'], ['def'] ],
 			fields => [{ name => 'X', type => \&is_alpha }],
 			log => \@log
 		], 'TableReader' );
@@ -31,7 +30,7 @@ subtest validation_die => sub {
 subtest validation_next => sub {
 	open(my $csv, '<', \"X\n1\n2\n\n15\nX\nY\nZ\n16\n") or die;
 	my $tr= new_ok( 'Data::TableReader', [
-			input => $csv, decoder => 'CSV',
+			input => [ ['X'], ['1'], ['2'], [''], ['15'], ['X'], ['Y'], ['Z'], ['16'] ],
 			fields => [{ name => 'X', type => \&is_num }],
 			on_validation_fail => 'next',
 			log => $log
@@ -40,10 +39,9 @@ subtest validation_next => sub {
 };
 
 subtest validation_use => sub {
-	open(my $csv, '<', \"X\n1\n2\nx\n15\n") or die;
 	my @log;
 	my $tr= new_ok( 'Data::TableReader', [
-			input => $csv, decoder => 'CSV',
+			input => [ ['X'], ['1'], ['2'], ['x'], ['15'] ],
 			fields => [{ name => 'X', type => \&is_num }],
 			on_validation_fail => 'use',
 			log => \@log
@@ -54,10 +52,9 @@ subtest validation_use => sub {
 };
 
 subtest validation_custom => sub {
-	open(my $csv, '<', \"X\n1\n2\nx\n15\n") or die;
 	my @log;
 	my $tr= new_ok( 'Data::TableReader', [
-			input => $csv, decoder => 'CSV',
+			input => [ ['X'], ['1'], ['2'], ['x'], ['15'] ],
 			fields => [{ name => 'X', type => \&is_num }],
 			on_validation_fail => sub {
 				my ($reader, $failures, $values, $context)= @_;

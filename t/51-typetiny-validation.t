@@ -6,8 +6,7 @@ use Try::Tiny;
 use File::Spec::Functions 'catfile';
 use Log::Any '$log';
 use Log::Any::Adapter 'TAP', filter => 'warn';
-
-use_ok( 'Data::TableReader' ) or BAIL_OUT;
+use Data::TableReader;
 
 plan skip_all => 'Requires Types::Standard to be installed'
 	unless eval { require Types::Standard };
@@ -20,19 +19,16 @@ my $camelcase= Types::Standard::Str()
 		$x;
 	});
 
-my $csv= <<CSV;
-id,name   ,description
-1 ,   test,
-2,Test_2,Some details
-3,test_three ,  yada yada
-4,can't coerce,
- ,cant_coerce_id,
-CSV
-
 subtest trim_validate_coerce => sub {
-	open my $fh, '<', \$csv or die;
 	my $tr= new_ok( 'Data::TableReader', [
-			input => $fh, decode => 'CSV',
+			input => [
+                           [ 'id', 'name   ', 'description' ],
+                           [ '1 ', '   test', '' ],
+                           [ '2',  'Test_2', 'Some details' ],
+                           [ '3',  'test_three ', '  yada yada' ],
+                           [ '4',  "can't coerce", '' ],
+                           [ ' ',  'cant_coerce_id', '' ],
+                        ],
 			fields => [
 				{ name => 'id', trim => 1, type => Types::Standard::Int() },
 				{ name => 'name', trim => 1, type => $camelcase, coerce => 1 },
