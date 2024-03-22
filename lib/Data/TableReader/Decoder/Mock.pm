@@ -2,7 +2,7 @@ package Data::TableReader::Decoder::Mock;
 use Moo 2;
 use Carp 'croak';
 use IO::Handle;
-require MRO::Compat if $] < '5.10';
+require MRO::Compat if $] < '5.010';
 
 extends 'Data::TableReader::Decoder';
 
