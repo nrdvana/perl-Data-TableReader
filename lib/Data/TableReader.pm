@@ -2,7 +2,8 @@ package Data::TableReader;
 use Moo 2;
 use Try::Tiny;
 use Carp;
-use List::Util 'max';
+use Scalar::Util ();
+use List::Util ();
 use Module::Runtime 'require_module';
 use Data::TableReader::Field;
 use Data::TableReader::Iterator;
@@ -263,7 +264,7 @@ sub _build__file_handle {
 	my $self= shift;
 	my $i= $self->input;
 	return undef if ref($i) && (
-		ref($i) eq "Spreadsheet::ParseExcel::Worksheet"
+		(Scalar::Util::blessed($i) && ($i->can('get_cell') || $i->can('worksheets')))
 		or ref($i) eq 'ARRAY'
 	);
 	return $i if ref($i) && (ref($i) eq 'GLOB' or ref($i)->can('read'));
@@ -344,7 +345,7 @@ sub _build_field_by_name {
 sub _build_header_row_combine {
 	my $self= shift;
 	# If headers contain "\n", we need to collect multiple cells per column
-	max map { 1+(()= ($_->header_regex =~ /\\n|\n/g)) } $self->field_list;
+	List::Util::max(map { 1+(()= ($_->header_regex =~ /\\n|\n/g)) } $self->field_list);
 }
 
 # 'log' can be a variety of things, but '_log' will always be a coderef
@@ -398,6 +399,7 @@ sub detect_input_format {
 		if ref($input) && ref($input)->can('get_cell');
 	return ('XLSX', workbook => $input)
 		if ref($input) && ref($input)->can('worksheets');
+	# Convenience for passing already-parsed data
 	if (ref($input) eq 'ARRAY') {
 		# if user supplied single table of data, wrap it in an array to make an array of tables.
 		$input= [ $input ]
