@@ -125,9 +125,14 @@ BEGIN { @Data::TableReader::Decoder::Spreadsheet::_Iter::ISA= ('Data::TableReade
 
 sub Data::TableReader::Decoder::Spreadsheet::_Iter::position {
 	my $f= shift->_fields;
-	'row '.${ $f->{row_ref} };
+	($f->{sheet_idx} > 0? 'sheet '.($f->{sheet_idx}+1).' ' : '')
+		.'row '.(1+${ $f->{row_ref} });
 }
-   
+
+sub Data::TableReader::Decoder::Spreadsheet::_Iter::row {
+	1 + ${ shift->_fields->{row_ref} };
+}
+
 sub Data::TableReader::Decoder::Spreadsheet::_Iter::progress {
 	my $f= shift->_fields;
 	return ${ $f->{row_ref} } / (${ $f->{rowmax_ref} } || 1);

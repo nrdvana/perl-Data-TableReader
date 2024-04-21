@@ -166,6 +166,10 @@ sub Data::TableReader::Decoder::HTML::_Iter::position {
 	'table '.${ $f->{table_i} }.' row '.${ $f->{row_i} };
 }
 
+sub Data::TableReader::Decoder::HTML::_Iter::row {
+	${ shift->_fields->{row_i} };
+}
+
 sub Data::TableReader::Decoder::HTML::_Iter::progress {
 	my $f= shift->_fields;
 	return ! $f->{total_records}? 0

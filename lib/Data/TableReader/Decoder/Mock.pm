@@ -86,8 +86,7 @@ sub iterator {
 		sub {
 			my $slice= shift;
 			return undef unless $row < $rowmax;
-			++$row;
-			my $datarow= $table->[$row];
+			my $datarow= $table->[++$row];
 			return [ @{$datarow}[@$slice] ] if $slice;
 			return $datarow;
 		},
@@ -110,7 +109,11 @@ BEGIN { @Data::TableReader::Decoder::Mock::_Iter::ISA= ('Data::TableReader::Iter
 
 sub Data::TableReader::Decoder::Mock::_Iter::position {
 	my $f= shift->_fields;
-	'row '.${ $f->{row_ref} };
+	'row '.(1 + ${ $f->{row_ref} });
+}
+
+sub Data::TableReader::Decoder::Mock::_Iter::row {
+	1 + ${ shift->_fields->{row_ref} };
 }
 
 sub Data::TableReader::Decoder::Mock::_Iter::progress {

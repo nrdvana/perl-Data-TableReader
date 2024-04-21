@@ -163,8 +163,8 @@ sub iterator {
 	}
 	my $i= Data::TableReader::Decoder::CSV::_Iter->new(
 		sub {
-			++$$row_ref;
 			my $r= $parser->getline($fh) or return undef;
+			++$$row_ref;
 			@$r= @{$r}[ @{$_[0]} ] if $_[0]; # optional slice argument
 			return $r;
 		},
@@ -225,6 +225,10 @@ BEGIN { @Data::TableReader::Decoder::CSV::_Iter::ISA= ('Data::TableReader::Itera
 sub Data::TableReader::Decoder::CSV::_Iter::position {
 	my $f= shift->_fields;
 	'row '.${ $f->{row} };
+}
+
+sub Data::TableReader::Decoder::CSV::_Iter::row {
+	${ shift->_fields->{row} }
 }
 
 sub Data::TableReader::Decoder::CSV::_Iter::progress {

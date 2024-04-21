@@ -41,6 +41,11 @@ not all of the record is needed.
 Return a human-readable string describing the current location within the source file.
 This will be something like C<"$filename row $row"> or C<"$filename $worksheet:$cell_id">.
 
+=head2 row
+
+A numeric 1-based row number for the current position of the current dataset.  This is not
+affected by which row the header was found on.
+
 =head2 progress
 
 An estimate of how much of the data has already been returned.  If the stream
