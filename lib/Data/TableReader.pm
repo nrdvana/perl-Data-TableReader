@@ -131,12 +131,14 @@ to undef if you also set C<< static_field_order => 1 >>.
 This is an arrayref, one element per column of input data, listing which field was detected
 to come from that column.  If you specify this to the constructor, L</find_table> will respect
 any defined element of the array, but still search for matching headers in the undefined
-columns.
+columns.  After a successful L</find_table>, C<col_map> is changed to refer to the same hash as
+C<< ->table_search_results->{found}{col_map} >>.  (If you wanted to re-run the search for the
+table, you need to both C<clear_table_search_results> I<and> reset C<col_map> to whatever
+you passed to the constructor.)
 
 For backward compatibility, if you did not specify this attribute to the constructor and try
-accessing it before calling L</find_table>, it automatically calls L</find_table> for you.
-If you did pass it to the constructor, you get back what you passed in, until you call
-L</find_table> yourself at which point it tries to fill in the undef elements.
+accessing it before calling L</find_table>, it automatically calls L</find_table> for you
+(and die if it fails).
 
 =head2 has_col_map
 
@@ -151,7 +153,6 @@ This is the output of the most recent L</find_table> operation.
       { row_idx => $n,
         dataset_idx => $n,
         col_map => [ $field_or_undef, $field_or_undef, ... ],
-        field_map => { $field_name => \@col_idx, ... },
         ambiguous => { $field_name => \@col_idx, ... },
         missing_required => \@fields,
         messages => [],
@@ -170,14 +171,15 @@ Predicate and clearer for lazy-built table_search_results.
   on_partial_match    => 'next'    # keep searching for a better line of headers
   on_partial_match    => 'last'    # return failure from ->find_table
   on_partial_match    => sub {
-    my ($reader, $candidate)= @_;
+    my ($reader, $candidate, $header_row)= @_;
     return $action; # one of the above values
   }
 
 During L</find_table>, if a row is found that matches at least one header, but fails to match
-all the required headers, or has ambiguous headers, you can either keep searching for a better
-header row, or stop here.  The default is 'next', to keep searching, but this may result in a
-lot of noise.  The 'last' setting allows you to stop after a likely header row.
+all the requirements (required columns, unknown or ambiguous columns if those are configured as
+an error) you can either keep searching for a better header row, or stop here.  The default is
+'next', to keep searching, but this may result in a lot of noise.  The 'last' setting allows
+you to stop after a likely header row.
 
 If you supply a coderef, you receive the "candidate" info described in L</table_search_results>.
 
@@ -345,6 +347,26 @@ has on_blank_row        => ( is => 'rw', default => sub { 'next' } );
 has on_validation_fail  => ( is => 'rw', default => sub { 'die' } );
 has log                 => ( is => 'rw', trigger => sub { shift->_clear_log } );
 
+sub BUILD {
+	my ($self)= @_;
+	# If user supplied col_map, it probably contains names instead of Field objects.
+	if ($self->has_col_map) {
+		# Make a new array in case other parts of user code refer to current one
+		$self->col_map($self->_resolve_colmap_names([ @{ $self->col_map } ]);
+	}
+}
+
+# Modifies array to replace name with field ref
+sub _resolve_colmap_names {
+	my ($self, $colmap)= @_;
+	for (grep defined && !ref, @$col_map) {
+		defined(my $f= $self->field_by_name->{$_})
+			or croak("col_map specifies non-existent field '$_'");
+		$_= $f;
+	}
+	\$colmap;
+}
+
 # Open 'input' if it isn't already a file handle
 sub _build__file_handle {
 	my $self= shift;
@@ -425,7 +447,7 @@ sub _coerce_field_list {
 sub _build_field_by_name {
 	my $self= shift;
 	# reverse list so first field of a name takes precedence
-	{ map { $_->name => $_ } reverse @{ $self->fields } }
+	return { map +( $_->name => $_ ), reverse @{ $self->fields } }
 }
 
 sub _build_header_row_combine {
@@ -602,10 +624,10 @@ sub find_table {
 	return defined $result->{found};
 }
 
-sub field_map {
-	my $self= shift;
-	# Calculate field map from col map
-	my $col_map= shift || $self->col_map;
+sub field_map { _field_map(shift->col_map) }
+
+sub _field_map {
+	my $col_map= shift;
 	my %fmap;
 	for my $i (0 .. $#$col_map) {
 		next unless defined $col_map->[$i];
@@ -656,7 +678,6 @@ sub _find_table {
 			row_idx => -1,
 			dataset_idx => 0,
 			col_map => $col_map,
-			field_map => $self->field_map($col_map),
 			messages => [],
 			first_record_pos => $data_iter->tell,
 			_data_iter => $data_iter,
@@ -764,15 +785,14 @@ sub _match_headers_dynamic {
 	my $user_colmap= $self->has_col_map? $self->col_map : [];
 	my @colmap= @$user_colmap;
 	$attempt->{col_map}= \@colmap;
-	# Search every cell of the header, except ones specified by the user if deducing ambiguous headers
-	my @col_search_idx= $self->on_ambiguous_columns eq 'error'? (0 .. $#$header)
-		: (grep !defined $colmap[$_], 0 .. $#$header);
+	# Search every cell of the header, except ones specified by the user
+	my @col_search_idx= grep !defined $colmap[$_], 0 .. $#$header;
 	# Track found matches in %fieldmap  { field_name => col_idx }
 	my %fieldmap= map +( $colmap[$_]->name => $_ ), grep defined $colmap[$_], 0..$#colmap;
 	# List of fields which can only follow certain other fields (and not already positioned by user)
-	my @follows_fields= grep +( !$fieldmap{$_->name} and $_->follows_list ), @$fields;
+	my @follows_fields= grep +( !defined $fieldmap{$_->name} and $_->follows_list ), @$fields;
 	# List of fields that can be located anywhere (and not already positioned by user)
-	my @free_fields= grep +( !$fieldmap{$_->name} and !$_->follows_list ), @$fields;
+	my @free_fields= grep +( !defined $fieldmap{$_->name} and !$_->follows_list ), @$fields;
 	# Sort required fields to front, to fail faster on non-matching rows
 	# But otherwise preserve field order in case it matters for priority of matching
 	@free_fields= ( (grep $_->required, @free_fields), (grep !$_->required, @free_fields) );
@@ -780,7 +800,6 @@ sub _match_headers_dynamic {
 #      { row_idx => $n,
 #        dataset_idx => $n,
 #        col_map => [ $field_or_undef, $field_or_undef, ... ],
-#        field_map => { $field_name => \@col_idx, ... },
 #        ambiguous => { $field_name => \@col_idx, ... },
 #        missing_required => \@fields,
 #        messages => [],
@@ -828,7 +847,7 @@ sub _match_headers_dynamic {
 			# If user wants to reject ambiguous columns, @col_search_idx will still include the
 			# matched columns, so need to check 
 			if (my $conflict= $colmap[$idx]) {
-				$attempt->{ambiguous}{$f->name}= \@found;
+				push @{$attempt->{ambiguous}[$_]}, $f->name for @found;
 				$attempt->{ambiguous}{$conflict->name} ||= [ @found ];
 				push @{$attempt->{messages}},
 					[ error => sprintf('Field %s and %s both match column %s', $f->name, $conflict->name, $idx) ];
@@ -918,9 +937,16 @@ sub _match_headers_dynamic {
 		}
 	}
 	# If there are still ambiguous columns, report that
-	my @ambiguous_cols= grep defined, @ambiguous_per_col;
+	my @ambiguous_cols= grep defined $ambiguous_per_col[0], 0 .. $#$header;
 	if (@ambiguous_cols) {
-		my $act= $self->on_ambiguous_cols;
+		my $act= $self->on_ambiguous_columns;
+		my $unknown_list= join(', ', map $self->_fmt_header_text($header->[$_]), @ambiguous_cols);
+		# TODO: Haven't decided on the user-facing callback API for this yet
+		#$act= $act->($self, $header, \@unclaimed) if ref $act eq 'CODE';
+		if ($act ne 'warn') {
+			push @{$attempt->{messages}}, [ error => 'Would match except for ambiguous columns: '.$unknown_list ];
+			return 0;
+		}
 	}
 	# Now, if there are any un-claimed columns, handle per 'on_unknown_columns' setting.
 	my @unclaimed= grep !$colmap[$_], 0 .. $#$header;
@@ -934,9 +960,11 @@ sub _match_headers_dynamic {
 			push @{$attempt->{messages}}, [ error => 'Would match except for unknown columns: '.$unknown_list ];
 			return 0;
 		} elsif ($act eq 'die') {
+			# 'fatal' message flags caller to stop searching
 			push @{$attempt->{messages}}, [ fatal => "${context}Header row includes unknown columns: $unknown_list" ];
 			return 0;
 		} else {
+			# 'fatal' message flags caller to stop searching
 			push @{$attempt->{messages}}, [ fatal => "Invalid action '$act' for 'on_unknown_columns'" ];
 			return 0;
 		}
@@ -989,8 +1017,8 @@ sub iterator {
 		$data_iter= $self->decoder->iterator;
 		$data_iter->seek($self->table_search_results->{found}{first_record_pos});
 	}
-	my $col_map=   $self->col_map;
-	my $field_map= $self->field_map;
+	my $col_map=   $self->table_search_results->{found}{col_map};
+	my $field_map= _field_map($col_map);
 	my @row_slice; # one column index per field, and possibly more for array_val_map
 	my @arrayvals; # list of source index and destination index for building array values
 	my @field_names; # ordered list of field names where row slice should be assigned

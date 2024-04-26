@@ -9,10 +9,28 @@ use Log::Any::Adapter 'TAP', filter => 'warn';
 use_ok( 'Data::TableReader' ) or BAIL_OUT;
 
 # Find fields in the exact order they are present in the file
+sub mock_data {
+	[
+		[
+			[ qw( Name Address City State Zip ) ],
+			[ 'Someone', '123 Long St', 'Somewhere', 'OH', '45678' ],
+			[ ('')x5 ],
+			[ 'Another', '01 Main St',  'Elsewhere', 'OH', '45678' ],
+		],
+		[
+			[ 'Zip Codes','',   '',                '','Cities',                     '','','',       'State Postal Codes','','' ],
+			[ 'Zip',   'Lat','Lon',                '','with population > 1,000,000','','','',       'State','PostCode','Country'],
+			[ '45001', '39.138752','-84.709618',   '','City',         'State',     'Population','', 'Alberta','AB','CA'],
+			[ '45002', '39.182833','-84.723477',   '','New York City','New York',  '8,550,405','',  'Alaska','AK','US' ],
+			[ '45003', '39.588296','-84.786326',   '','Los Angeles',  'California','3,971,883','',  'Alabama','AL','US' ],
+			[ '','','',                            '','Chicago',      'Illinois',  '2,720,546','',  'Arkansas','AR','US' ],
+			[ '','','',                            '','Houston',      'Texas',     '2,296,224','',  'American Samoa','AS','US' ],
+		]
+	]
+}
 subtest basic => sub {
 	my $ex= new_ok( 'Data::TableReader', [
-			input => \'',
-			decoder => { CLASS => 'Mock', data => mock_data() },
+			input => mock_data(),
 			fields => [
 				{ name => 'name' },
 				{ name => 'address' },
@@ -33,8 +51,7 @@ subtest basic => sub {
 
 subtest find_on_second_sheet => sub {
 	my $ex= new_ok( 'Data::TableReader', [
-			input => \'',
-			decoder => { CLASS => 'Mock', data => mock_data() },
+			input => mock_data(),
 			fields => [
 				{ name => 'postcode' },
 				{ name => 'country' },
@@ -54,16 +71,10 @@ subtest find_on_second_sheet => sub {
 
 subtest find_required => sub {
 	my $ex= new_ok( 'Data::TableReader', [
-			input => \'',
-			decoder => {
-				CLASS => 'Mock',
-				data => [
-					[
-						[qw( q w e r t y )],
-						[qw( q w e r t a s d )],
-					]
-				],
-			},
+			input => [
+				[qw( q w e r t y )],
+				[qw( q w e r t a s d )],
+			],
 			fields => [
 				{ name => 'q', required => 1 },
 				{ name => 'w', required => 1 },
@@ -81,18 +92,12 @@ subtest find_required => sub {
 
 subtest multiline_header => sub {
 	my $ex= new_ok( 'Data::TableReader', [
-			input => \'',
-			decoder => {
-				CLASS => 'Mock',
-				data => [
-					[
-						[qw( a b c )],
-						[qw( d e f )],
-						[qw( g b c )],
-						[qw( A B C )],
-					]
-				]
-			},
+			input => [
+				[qw( a b c )],
+				[qw( d e f )],
+				[qw( g b c )],
+				[qw( A B C )],
+			],
 			fields => [
 				{ name => 'a', header => "d g" },
 				{ name => 'b', header => "b\ne\nb" },
@@ -108,16 +113,10 @@ subtest multiline_header => sub {
 
 subtest multi_column => sub {
 	my $ex= new_ok( 'Data::TableReader', [
-			input => \'',
-			decoder => {
-				CLASS => 'Mock',
-				data => [
-					[
-						[qw( a b a c a d )],
-						[qw( 1 2 3 4 5 6 )],
-					]
-				]
-			},
+			input => [
+				[qw( a b a c a d )],
+				[qw( 1 2 3 4 5 6 )],
+			],
 			fields => [
 				{ name => 'a', header => qr/a|c/, array => 1 },
 				{ name => 'd' },
@@ -131,18 +130,12 @@ subtest multi_column => sub {
 
 subtest array_at_end => sub {
 	my $ex= new_ok( 'Data::TableReader', [
-			input => \'',
-			decoder => {
-				CLASS => 'Mock',
-				data => [
-					[
-						[qw( a b c ),'','','','',''],
-						[qw( 1 2 3 4 5 6 7 8 9 )],
-						[qw( 1 2 3 4 5 6 7 8 9 10 11 12 13 )],
-						[qw( 1 2 3 4 )],
-					]
-				]
-			},
+			input => [
+				[qw( a b c ),'','','','',''],
+				[qw( 1 2 3 4 5 6 7 8 9 )],
+				[qw( 1 2 3 4 5 6 7 8 9 10 11 12 13 )],
+				[qw( 1 2 3 4 )],
+			],
 			fields => [
 				'a',
 				{ name => 'c', array => 1 },
@@ -161,17 +154,11 @@ subtest array_at_end => sub {
 
 subtest complex_follows => sub {
 	my $ex= new_ok( 'Data::TableReader', [
-			input => \'',
-			decoder => {
-				CLASS => 'Mock',
-				data => [
-					[
-						['name', 'start coords','','','','end coords','','','',''],
-						['',     'x', 'y', 'w', 'h',     'x','y','w','h'],
-						['foo',  '1', '1', '6', '6',     '2','2','8','8'],
-					]
-				]
-			},
+			input => [
+				['name', 'start coords','','','','end coords','','','',''],
+				['',     'x', 'y', 'w', 'h',     'x','y','w','h'],
+				['foo',  '1', '1', '6', '6',     '2','2','8','8'],
+			],
 			fields => [
 				'name',
 				{ name => 'start_x', header => qr/start.*\nx/ },
@@ -189,25 +176,3 @@ subtest complex_follows => sub {
 };
 
 done_testing;
-
-sub mock_data {
-	[
-		[ map { [ split /\t/, $_, 5 ] } split "\n", <<'END'
-Name	Address	City	State	Zip
-Someone	123 Long St	Somewhere	OH	45678
-				
-Another	01 Main St	Elsewhere	OH	45678
-END
-		],
-		[ map { [ split /\t/, $_, 11 ] } split "\n", <<'END'
-Zip Codes				Cities				State Postal Codes		
-Zip	Lat	Lon		with population > 1,000,000				State	PostCode	Country
-45001	39.138752	-84.709618		City	State	Population		Alberta	AB	CA
-45002	39.182833	-84.723477		New York City	New York	8,550,405		Alaska	AK	US
-45003	39.588296	-84.786326		Los Angeles	California	3,971,883		Alabama	AL	US
-				Chicago	Illinois	2,720,546		Arkansas	AR	US
-				Houston	Texas	2,296,224		American Samoa	AS	US
-END
-		]
-	]
-}

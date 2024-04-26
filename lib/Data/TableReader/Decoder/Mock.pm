@@ -97,7 +97,7 @@ sub iterator {
 			row_ref => \$row,
 			colmax_ref => \$colmax,
 			rowmax_ref => \$rowmax,
-			origin => [ $table, $row ],
+			origin => [ 0, $row ],
 		}
 	);
 }
