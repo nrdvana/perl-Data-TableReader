@@ -1,4 +1,6 @@
-
+Version 0.015 - 2024-04-27
+ - Better support for fields sharing name, with Field->addr (refaddr) and
+   TableReader->field_by_addr
  - Decoder iterators now have ->row attribute
  - Spreadsheet decoder ->position includes sheet number and now uses
    1-based row number (as originally intended)

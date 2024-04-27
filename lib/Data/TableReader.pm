@@ -353,7 +353,7 @@ has input               => ( is => 'rw', required => 1 );
 has _file_handle        => ( is => 'lazy' );
 has _decoder_arg        => ( is => 'rw', init_arg => 'decoder' );
 has decoder             => ( is => 'lazy', init_arg => undef );
-has fields              => ( is => 'ro', required => 1, coerce => \&_coerce_field_list );
+has fields              => ( is => 'rw', required => 1, coerce => \&_coerce_field_list );
 sub field_list             { @{ shift->fields } }
 has field_by_name       => ( is => 'lazy' );
 has field_by_addr       => ( is => 'lazy' );
