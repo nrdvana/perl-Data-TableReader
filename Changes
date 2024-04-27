@@ -6,6 +6,9 @@
    inspection and reporting on a failure.  This allows detection messages
    to be associated with a row, and various conflicts to be associated with
    a column (without parsing message text).
+ - On a failed find_table, user can inspect the attempts in
+   table_search_results->{candidates} and select one to be ->{found}, and
+   then proceed to create the iterator.
  - col_map is now a full attribute and can be specified in the constructor.
    find_table starts with the user-supplied value and tries to fill in any
    'undef' values in that array.
