@@ -1,3 +1,6 @@
+Version 0.015 - 2024-04-27
+ - Add attribute Iterator->row which reports the current 1-based table row
+
 Version 0.009 - 2019-01-02
  - Basic support for HTML files
 
