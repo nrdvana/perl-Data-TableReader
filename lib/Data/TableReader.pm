@@ -481,6 +481,7 @@ sub _coerce_field_list {
 			$_= Data::TableReader::Field->new(\%args)
 		} else {
 			croak "Can't coerce '$_' to a Field object"
+				unless blessed($_) && $_->isa('Data::TableReader::Field');
 		}
 	}
 	return \@list;
