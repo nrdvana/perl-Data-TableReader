@@ -1,3 +1,4 @@
+Version 0.020 - 2024-04-30
  - New attribute Iterator->dataset_idx
  - Fix bug where next_dataset returned true after the final table
 
