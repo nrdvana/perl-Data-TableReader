@@ -751,9 +751,9 @@ sub _find_table {
 		
 		# Scan through the rows of the dataset up to the end of header_row_at, accumulating rows so that
 		# multi-line regexes can match.
-		for ($start .. $end) {
+		for my $row ($start .. $end) {
 			my %attempt= (
-				row_idx => $_,
+				row_idx => $row-1,
 				dataset_idx => $dataset_idx,
 				messages => []
 			);
