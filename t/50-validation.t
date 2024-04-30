@@ -33,9 +33,10 @@ subtest validation_next => sub {
 			input => [ ['X'], ['1'], ['2'], [''], ['15'], ['X'], ['Y'], ['Z'], ['16'] ],
 			fields => [{ name => 'X', type => \&is_num }],
 			on_validation_fail => 'next',
-			log => $log
+			log => \my @log
 		], 'TableReader' );
-	is_deeply( $tr->iterator->all, [ { X => 1 }, { X => 2 }, { X => 15 }, { X => 16 } ], 'only numeric values' );
+	is_deeply( $tr->iterator->all, [ { X => 1 }, { X => 2 }, { X => 15 }, { X => 16 } ], 'only numeric values' )
+		or note explain \@log;
 };
 
 subtest validation_use => sub {
@@ -71,7 +72,7 @@ subtest validation_custom => sub {
 			log => \@log
 		], 'TableReader' );
 	is_deeply( $tr->iterator->all, [ { X => 1 }, { X => 2 }, { X => 0 }, { X => 15 } ], 'keep munged value' );
-	is_deeply( \@log, [], 'no warnings' );
+	is_deeply( \@log, [], 'no warnings' ) or note explain @log;
 };
 
 done_testing;
