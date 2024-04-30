@@ -1,3 +1,8 @@
+ - New iterator attribute 'dataset_idx', for keeping track of which dataset
+   you're on.
+ - Unimplemented Iterator->seek now dies as per the documentation.
+   (no built-in iterator lacked support for seek, so unlikely to matter)
+
 Version 0.015 - 2024-04-27
  - Better support for fields sharing name, with Field->addr (refaddr) and
    TableReader->field_by_addr

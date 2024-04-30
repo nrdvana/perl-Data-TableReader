@@ -1202,11 +1202,18 @@ sub _handle_validation_fail {
 }
 
 BEGIN { @Data::TableReader::_RecIter::ISA= ( 'Data::TableReader::Iterator' ) }
+
 sub Data::TableReader::_RecIter::all {
 	my $self= shift;
 	my (@rec, $x);
 	push @rec, $x while ($x= $self->());
 	return \@rec;
+}
+sub Data::TableReader::_RecIter::dataset_idx {
+	shift->_fields->{data_iter}->dataset_idx(@_);
+}
+sub Data::TableReader::_RecIter::row {
+	shift->_fields->{data_iter}->row(@_);
 }
 sub Data::TableReader::_RecIter::position {
 	shift->_fields->{data_iter}->position(@_);

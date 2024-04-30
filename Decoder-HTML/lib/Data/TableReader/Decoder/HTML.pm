@@ -170,6 +170,10 @@ sub Data::TableReader::Decoder::HTML::_Iter::row {
 	${ shift->_fields->{row_i} };
 }
 
+sub Data::TableReader::Decoder::HTML::_Iter::dataset_idx {
+	${ shift->_fields->{table_i} }
+}
+
 sub Data::TableReader::Decoder::HTML::_Iter::progress {
 	my $f= shift->_fields;
 	return ! $f->{total_records}? 0
@@ -195,7 +199,7 @@ sub Data::TableReader::Decoder::HTML::_Iter::seek {
 
 sub Data::TableReader::Decoder::HTML::_Iter::next_dataset {
 	my $f= $_[0]->_fields;
-	return if ${$f->{table_i}} >= @{$f->{tables}};
+	return 0 if ${$f->{table_i}} >= $#{$f->{tables}};
 	$_[0]->seek([ ${$f->{table_i}}+1, 0 ]);
 }
 

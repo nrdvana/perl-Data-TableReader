@@ -133,6 +133,10 @@ sub Data::TableReader::Decoder::Spreadsheet::_Iter::row {
 	1 + ${ shift->_fields->{row_ref} };
 }
 
+sub Data::TableReader::Decoder::Spreadsheet::_Iter::dataset_idx {
+	shift->_fields->{sheet_idx};
+}
+
 sub Data::TableReader::Decoder::Spreadsheet::_Iter::progress {
 	my $f= shift->_fields;
 	return ${ $f->{row_ref} } / (${ $f->{rowmax_ref} } || 1);

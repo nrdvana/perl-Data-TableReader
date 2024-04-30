@@ -1,3 +1,6 @@
+ - New attribute Iterator->dataset_idx
+ - Fix bug where next_dataset returned true after the final table
+
 Version 0.016 - 2024-04-29
  - Corrected META.json dependency version of Data::TableReader
 
