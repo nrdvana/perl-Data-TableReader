@@ -1114,7 +1114,7 @@ sub iterator {
 			: $vals;
 		# Handle any validation errors detected above
 		if (@failed) {
-			$self->_handle_validation_fail(\@failed, $out, $data_iter)
+			$self->_handle_validation_error(\@failed, $out, $data_iter)
 				or goto again;
 		}
 		# Construct a class, if requested, else return hashref
@@ -1188,7 +1188,7 @@ sub iterator {
 			);
 			push @path, ($i - $array_start)
 				if defined $array_start;
-			push @type_check, $self->_make_validation_callback($field, $i, \@path);
+			push @type_check, $self->_make_validation_check_coderef($field, $i, \@path);
 		}
 	}
 	@trim= values %trimmer;
@@ -1198,7 +1198,7 @@ sub iterator {
 	);
 }
 
-sub _make_validation_callback {
+sub _make_validation_check_coderef {
 	my ($self, $field, $vals_idx, $out_path)= @_;
 	my $t= $field->type;
 	my $c= $field->coerce;
@@ -1279,9 +1279,9 @@ sub _handle_blank_row {
 	croak "Invalid value for 'on_blank_row': \"$act\"";
 }
 
-sub _handle_validation_fail {
+sub _handle_validation_error {
 	my ($self, $failures, $output, $data_iter)= @_;
-	my $act= $self->on_validation_fail;
+	my $act= $self->on_validation_error;
 	if (ref $act eq 'CODE') {
 		# Fill in the second element (ref to $output) for each failure
 		for (@$failures) {
@@ -1308,6 +1308,7 @@ sub _handle_validation_fail {
 	}
 }
 
+# This is back-compat for the previous callback API which was an attribute named 'on_validation_fail'
 sub _wrap_on_validation_fail {
 	my $orig_cb= shift;
 	return sub {
