@@ -42,7 +42,7 @@ but there are plenty of options to choose from...
     
     # Our data provider is horrible; just ignore any nonsense we encounter
     on_blank_row => 'next',
-    on_validation_fail => 'next',
+    on_validation_error => 'next',
     
     # Capture warnings and show to user who uploaded file
     log => \(my @messages)
@@ -292,25 +292,28 @@ generate your own.
 
 The default is C<'next'>.
 
-=head2 on_validation_fail
+=head2 on_validation_error
 
-  on_validation_fail => 'next'  # warn, and then skip the record
-  on_validation_fail => 'use'   # warn, and then use the record anyway
-  on_validation_fail => 'die'   # fatal error
-  on_validation_fail => sub {
-    my ($reader, $failures, $values, $context)= @_;
+  on_validation_error => 'next'  # warn, and then skip the record
+  on_validation_error => 'use'   # warn, and then use the record anyway
+  on_validation_error => 'die'   # fatal error
+  on_validation_error => sub {
+    my ($tablereader, $failures, $record, $data_iterator)= @_;
+    # $record is the assembled hashref (unblessed) or arrayref of fields
+    # $data_iterator is the Decoder's row iterator, useful for context
     for (@$failures) {
-      my ($field, $value_index, $message)= @$_;
+      my ($field, $value_ref, $message, $path)= @$_;
       ...
       # $field is a Data::TableReader::Field
-      # $values->[$value_index] is the string that failed validation
+      # $$value_ref is the string that failed validation
       # $message is the error returned from the validation function
-      # $context is a string describing the source of the row, like "Row 5"
-      # You may modify $values to alter the record that is about to be created
+      # $path is the element (and maybe sub-element) of $record
+      #   i.e.  $value_ref= \$record->{$path[0]}[$path[1]]
+      # You may modify $$value_ref or $record to alter the output
     }
     # Clear the failures array to suppress warnings, if you actually corrected
     # the validation problems.
-    @$failures= () if $opt eq 'use';
+    @$failures= ();
     # return one of the above constants to tell the iterator what to do next
     return $opt;
   }
@@ -318,8 +321,6 @@ The default is C<'next'>.
 This determines what happens when you've found the table, are extracting
 records, and one row fails its validation.  In addition to deciding an option,
 the callback gives you a chance to alter the record before C<'use'>ing it.
-If you use the callback, it suppresses the default warning, since you can
-generate your own.
 
 The default is 'die'.
 
@@ -367,16 +368,34 @@ has on_partial_match    => ( is => 'rw', default => sub { 'next' } );
 has on_ambiguous_columns=> ( is => 'rw', default => sub { 'error' } );
 has on_unknown_columns  => ( is => 'rw', default => sub { 'warn' } );
 has on_blank_row        => ( is => 'rw', default => sub { 'next' } );
-has on_validation_fail  => ( is => 'rw', default => sub { 'die' } );
+has on_validation_error => ( is => 'rw', default => sub { 'die' } );
 has log                 => ( is => 'rw', trigger => sub { shift->_clear_log } );
 
 sub BUILD {
-	my ($self)= @_;
+	my ($self, $args)= @_;
 	# If user supplied col_map, it probably contains names instead of Field objects.
 	if ($self->has_col_map) {
 		# Make a new array in case other parts of user code refer to current one
 		$self->col_map($self->_resolve_colmap_names([ @{ $self->col_map } ]));
 	}
+	# Back-compat for previous API
+	if (defined (my $act= $args->{on_validation_fail})) {
+		croak "on_validation_fail (back-compat alias) conflicts with on_validation_error"
+			if defined $args->{on_validation_error};
+		$self->on_validation_fail($act);
+	}
+}
+
+sub on_validation_fail {
+	my $self= shift;
+	if (@_) {
+		my $act= shift;
+		#warn "on_validation_fail is deprecated (see on_validation_error)";
+		# adapt for the old API
+		$act= _wrap_on_validation_fail($act) if ref $act eq 'CODE';
+		return $self->on_validation_error($act);
+	}
+	return $self->on_validation_error;
 }
 
 # Modifies array to replace name with field ref
@@ -643,7 +662,7 @@ sub _build_table_search_results {
 }
 
 sub _build_col_map {
-	shift->table_search_results->{col_map}
+	shift->table_search_results->{found}{col_map}
 }
 
 sub find_table {
@@ -1132,7 +1151,6 @@ sub iterator {
 	}
 
 	my %trimmer;
-	main::note(main::explain({ input_slice => \@input_slice, output_slice => \@output_slice, output_keys => \@output_keys}));
 	for (my ($i, $out_ofs, $array_start, $array_lim)= (0,0); $i <= $#input_slice; $i++) {
 		my $col_idx= $input_slice[$i];
 		if (ref $col_idx eq 'ARRAY') {
@@ -1151,7 +1169,6 @@ sub iterator {
 		my $field= $col_map->[$col_idx];
 		# Handling for ->trim feature
 		if (my $t= $field->trim_coderef) {
-			main::note("field ".$field->name." at $i has trim ".refaddr($t));
 			$trimmer{refaddr $t} ||= [ $t, [] ];
 			push @{ $trimmer{refaddr $t}[1] }, $i;
 		}
@@ -1175,7 +1192,6 @@ sub iterator {
 		}
 	}
 	@trim= values %trimmer;
-	main::note(main::explain({ input_slice => \@input_slice, output_slice => \@output_slice, output_keys => \@output_keys, trim => \@trim }));
 
 	return Data::TableReader::_RecIter->new(
 		$sub, { data_iter => $data_iter, reader => $self },
@@ -1196,7 +1212,7 @@ sub _make_validation_callback {
 	ref $t eq 'CODE'? (
 		!$c? sub {
 			my $e= $t->($_[0][$vals_idx]);
-			defined $e? ([ $field, $out_path, $e ]) : ()
+			defined $e? ([ $field, undef, $e, $out_path ]) : ()
 		}
 	# type is a coderef, and coerce is a coderef
 		: ref $c eq 'CODE'? sub {
@@ -1205,7 +1221,7 @@ sub _make_validation_callback {
 				my $tmp= $c->($_[0][$vals_idx]);
 		      ($_[0][$vals_idx], $e)= ($tmp) unless defined $t->($tmp);
 			}
-			defined $e? ([ $field, $out_path, $e ]) : ()
+			defined $e? ([ $field, undef, $e, $out_path ]) : ()
 		}
 		: croak("Can't coerce field ".$field->name.": ->type is coderef and ->coerce is not a coderef")
 	)
@@ -1217,7 +1233,7 @@ sub _make_validation_callback {
 				my $tmp= $c->($_[0][$vals_idx]);
 		      ($_[0][$vals_idx], $e)= ($tmp) unless defined $t->validate($tmp);
 			}
-			defined $e? ([ $field, $out_path, $e ]) : ()
+			defined $e? ([ $field, undef, $e, $out_path ]) : ()
 		}
 	# type is a Type::Tiny, and coerce is requested and is available from the type object
 		: $c && $t_can_coerce? sub {
@@ -1226,12 +1242,12 @@ sub _make_validation_callback {
 				my $tmp= $t->coerce($_[0][$vals_idx]);
 		      ($_[0][$vals_idx], $e)= ($tmp) unless defined $t->validate($tmp);
 			}
-			defined $e? ([ $field, $out_path, $e ]) : ()
+			defined $e? ([ $field, undef, $e, $out_path ]) : ()
 		}
 	# type is a Type::Tiny, and coerce is not requested or not available
 		: sub {
 			my $e= $t->validate($_[0][$vals_idx]);
-			defined $e? ([ $field, $out_path, $e ]) : ()
+			defined $e? ([ $field, undef, $e, $out_path ]) : ()
 		}
 	)
 	: croak "Invalid type constraint $t on field ".$field->name;
@@ -1267,17 +1283,14 @@ sub _handle_validation_fail {
 	my ($self, $failures, $output, $data_iter)= @_;
 	my $act= $self->on_validation_fail;
 	if (ref $act eq 'CODE') {
-		my (@values, @value_refs);
+		# Fill in the second element (ref to $output) for each failure
 		for (@$failures) {
-			my $path= $_->[1];
+			my $path= $_->[3];
 			my $ref= ref $output eq 'HASH'? \$output->{$path->[0]} : \$output->[$path->[0]];
-			$ref= ${$ref}->[$path->[1]] if @$path > 1;
-			push @value_refs, $ref;
-			push @values, $$ref;
-			$_->[1]= $#values;
+			$ref= \(${$ref}->[$path->[1]]) if @$path > 1;
+			$_->[1]= $ref;
 		}
-		$act= $act->($self, $failures, \@values, $data_iter->position.': ');
-		${$value_refs[$_]}= $values[$_] for 0 .. $#value_refs;
+		$act= $act->($self, $failures, $output, $data_iter);
 	}
 	my $errors= join(', ', map $_->[0]->name.': '.$_->[2], @$failures);
 	if ($act eq 'next') {
@@ -1293,6 +1306,21 @@ sub _handle_validation_fail {
 		$self->_log->('error', $msg);
 		croak $msg;
 	}
+}
+
+sub _wrap_on_validation_fail {
+	my $orig_cb= shift;
+	return sub {
+		my ($self, $failures, $output, $data_iter)= @_;
+		# Old API gave the user a value index rather than a ref to the value
+		my @value_refs= map $_->[1], @$failures;
+		my @values= map $$_, @value_refs;
+		$failures->[$_][1]= $_ for 0 .. $#$failures;
+		my $act= $orig_cb->($self, $failures, \@values, $data_iter->position.': ');
+		# if they changed any values, write them back to the refs.
+		${$value_refs[$_]}= $values[$_] for 0 .. $#value_refs;
+		return $act;
+	};
 }
 
 BEGIN { @Data::TableReader::_RecIter::ISA= ( 'Data::TableReader::Iterator' ) }

@@ -5,12 +5,12 @@ use Test::More;
 use Try::Tiny;
 use File::Spec::Functions 'catfile';
 use Log::Any '$log';
-use Log::Any::Adapter 'TAP', filter => 'warn';
+use Log::Any::Adapter 'TAP', filter => 'none';
 
 use_ok( 'Data::TableReader' ) or BAIL_OUT;
 
-sub is_alpha { $_[0] =~ /^[a-z]+$/? undef : 'not alpha' }
-sub is_num { $_[0] =~ /^[0-9]+$/? undef : 'not numeric' }
+sub is_alpha { defined $_[0] and $_[0] =~ /^[a-z]+$/? undef : 'not alpha' }
+sub is_num { defined $_[0] and $_[0] =~ /^[0-9]+$/? undef : 'not numeric' }
 
 # Find fields in the exact order they are present in the file
 subtest validation_die => sub {
@@ -72,6 +72,41 @@ subtest validation_custom => sub {
 			log => \@log
 		], 'TableReader' );
 	is_deeply( $tr->iterator->all, [ { X => 1 }, { X => 2 }, { X => 0 }, { X => 15 } ], 'keep munged value' );
+	is_deeply( \@log, [], 'no warnings' ) or note explain @log;
+};
+
+subtest validation_new_api => sub {
+	my @log;
+	my $tr= new_ok( 'Data::TableReader', [
+			input => [ ['X', 'X', 'Y'], [1,1,1], ['2','3'], ['x',5], ['15'] ],
+			fields => [
+				{ name => 'X', type => \&is_num, array => 1 },
+				{ name => 'y', type => \&is_num }
+			],
+			on_validation_error => sub {
+				my ($reader, $failures, $record, $data_iter)= @_;
+				for (@$failures) {
+					my ($field, $value_ref, $message, $path)= @$_;
+					if ($field->name eq 'X') {
+						$$value_ref= 0;
+						$_= undef;
+					} elsif ($field->name eq 'y') {
+						$$value_ref= -1;
+						$_= undef;
+					}
+				}
+				@$failures= grep defined, @$failures;
+				return 'use';
+			},
+			log => \@log
+		], 'TableReader' );
+	is_deeply( [ map +($_? $_->name : undef), @{$tr->col_map} ], [ 'X', 'X', 'y' ], 'col_map' );
+	is_deeply( $tr->iterator->all, [
+		{ X => [1,1], y => 1 },
+		{ X => [2,3], y => -1 },
+		{ X => [0,5], y => -1 },
+		{ X => [15,0], y => -1 }
+		], 'keep munged value' );
 	is_deeply( \@log, [], 'no warnings' ) or note explain @log;
 };
 
