@@ -171,8 +171,8 @@ This is the output of the most recent L</find_table> operation.
 
   {
     candidates => [
-      { row_idx => $n,
-        dataset_idx => $n,
+      { dataset_idx => $n,
+        row => $n,
         col_map => [ $field_or_undef, $field_or_undef, ... ],
         missing_required => \@fields,
         ambiguous_columns => { $col_idx => \@fields, ... },
@@ -725,6 +725,7 @@ sub _find_table {
 		my $col_map= [ $self->has_col_map? @{$self->col_map} : @fields ];
 		$result{found}= {
 			row_idx => -1,
+			row => undef,
 			dataset_idx => 0,
 			col_map => $col_map,
 			messages => [],
@@ -754,6 +755,7 @@ sub _find_table {
 		for my $row ($start .. $end) {
 			my %attempt= (
 				row_idx => $row-1,
+				row => $row,
 				dataset_idx => $dataset_idx,
 				messages => []
 			);
