@@ -79,7 +79,6 @@ sub iterator {
 	my $self= shift;
 	my $data= $self->datasets;
 	my $table= $data->[0];
-	my $colmax= $table? scalar(@{$table->[0]})-1 : -1;
 	my $rowmax= $table? $#$table : -1;
 	my $row= -1;
 	Data::TableReader::Decoder::Mock::_Iter->new(
@@ -95,7 +94,6 @@ sub iterator {
 			table_idx => 0,
 			table_ref => \$table,
 			row_ref => \$row,
-			colmax_ref => \$colmax,
 			rowmax_ref => \$rowmax,
 			origin => [ 0, $row ],
 		}
@@ -136,13 +134,11 @@ sub Data::TableReader::Decoder::Mock::_Iter::seek {
 	$to ||= $f->{origin};
 	my ($table_idx, $row)= @$to;
 	my $table= $f->{data}[$table_idx];
-	my $colmax= $table? scalar(@{$table->[0]})-1 : -1;
 	my $rowmax= $table? $#$table : -1;
 	$row= -1 unless defined $row;
 	$f->{table_idx}= $table_idx;
 	${$f->{table_ref}}= $table;
 	${$f->{row_ref}}= $row;
-	${$f->{colmax_ref}}= $colmax;
 	${$f->{rowmax_ref}}= $rowmax;
 	1;
 }
