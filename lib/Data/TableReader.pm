@@ -228,7 +228,7 @@ in various ways:
 
 If a Field matches multiple columns (and isn't an array field) omit the field from the col_map
 entirely.  If a column matches multiple fields, leave the col_map blank for this column.
-Both generate warnings, but the header match can still proceeed to a successful result.
+Both generate warnings, but the header match can still proceed to a successful result.
 
 =item C<'error'> (default)
 
