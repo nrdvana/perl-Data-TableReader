@@ -615,13 +615,13 @@ sub detect_input_format {
 	return 'HTML' if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?<(!DOCTYPE )HTML/i;
 	# Else guess between CSV and TSV
 	my ($probably_csv, $probably_tsv)= (0,0);
-	++$probably_csv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[\w ]+["']?,/;
-	++$probably_tsv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[\w ]+["']?\t/;
+	++$probably_csv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[-\w. ]+["']?,/;
+	++$probably_tsv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[-\w. ]+["']?\t/;
 	my $comma_count= () = ($magic =~ /,/g);
 	my $tab_count= () = ($magic =~ /\t/g);
 	my $eol_count= () = ($magic =~ /\n/g);
-	++$probably_csv if $comma_count > $eol_count and $comma_count > $tab_count;
-	++$probably_tsv if $tab_count > $eol_count and $tab_count > $comma_count;
+	++$probably_csv if $comma_count >= $eol_count and $comma_count > $tab_count;
+	++$probably_tsv if $tab_count >= $eol_count and $tab_count > $comma_count;
 	$self->_log->('debug', 'probe results: comma_count=%d tab_count=%d eol_count=%d probably_csv=%d probably_tsv=%d',
 		$comma_count, $tab_count, $eol_count, $probably_csv, $probably_tsv);
 	return 'CSV' if $probably_csv and $probably_csv > $probably_tsv;
