@@ -413,11 +413,43 @@ sub _resolve_colmap_names {
 sub _build__file_handle {
 	my $self= shift;
 	my $i= $self->input;
-	return undef if ref($i) && (
-		(blessed($i) && ($i->can('get_cell') || $i->can('worksheets')))
-		or ref($i) eq 'ARRAY'
-	);
-	return $i if ref($i) && (ref($i) eq 'GLOB' or ref($i)->can('read'));
+	if (ref $i) {
+		my $cls= blessed($i) || '';
+		return $i if ref $i eq 'GLOB' # file handle
+					 or $cls && $i->can('read') && $i->can('eof'); # IO::Handle-ish object
+
+		# When supplied a spreadsheet object, no handle is needed
+		return undef if ref $i eq 'ARRAY'
+		             or $cls && ($i->can('get_cell') || $i->can('worksheets'));
+
+		# Support web framework upload objects
+		if ($cls =~ /::Upload/) {
+			# Support for Catalyst::Request::Upload, Dancer::Request::Upload,
+			# and Dancer2::Core::Request::Upload, all of which have 'tempname'.
+			if ($i->can('tempname') && defined $i->tempname) {
+				$i= $i->tempname;
+				$cls= '';
+			}
+			# Support Mojo::Upload
+			elsif ($cls->isa('Mojo::Upload')) {
+				$i= $i->asset;     # change input to the Mojo::Asset
+				$cls= blessed($i);
+			}
+			# Support for Plack::Request::Upload
+			elsif ($cls->isa('Plack::Request::Upload')) {
+				$i= $i->path;
+				$cls= '';
+			}
+		}
+
+		# Support for Mojo::Asset
+		if ($cls && $cls->isa('Mojo::Asset')) {
+			return $i->handle if $cls->isa('Mojo::Asset::File');
+			my $str= $i->slurp;
+			$i= \$str;
+		}
+	}
+
 	open(my $fh, '<', $i) or croak "open($i): $!";
 	binmode $fh;
 	return $fh;
@@ -431,6 +463,7 @@ sub _build_decoder {
 	my ($class, @args);
 	if (!$decoder_arg) {
 		($class, @args)= $self->detect_input_format;
+		croak "Can't determine file format" unless defined $class;
 		$self->_log->('trace', "Detected input format as %s", $class);
 	}
 	elsif (!$decoder_ref) {
@@ -443,8 +476,8 @@ sub _build_decoder {
 		};
 		if(!$class) {
 			my ($input_class, @input_args)= $self->detect_input_format;
-			croak "decoder class not in arguments and unable to identify decoder class from input"
-				if !$input_class;
+			croak "decoder class not specified in arguments, and unable to identify decoder class from input"
+				unless $input_class;
 			($class, @args)= ($input_class, @input_args, @args);
 		}
 	}
@@ -536,33 +569,109 @@ sub _log_fn {
 
 =head2 detect_input_format
 
+   my ($class, @args)= $tr->detect_input_format(\%hints);
    my ($class, @args)= $tr->detect_input_format( $filename, $head_of_file );
 
 This is used internally to detect the format of a file, but you can call it manually if you
-like.  The first argument (optional) is a file name, and the second argument (also optional)
-is the first few hundred bytes of the file.  Missing arguments will be pulled from L</input>
-if possible.  The return value is the best guess of module name and constructor arguments that
+like.  The following hints can be supplied as a hashref:
+
+  { http_headers => ...,  # hashref or various objects representing HTTP headers
+    content_type => ...,  # a MIME content-type, optional charset
+	 charset      => ...,  # a character set, as seen in charset=X on a MIME type
+    filename     => ...,  # filename, using file extension to guess content-type
+	 content_head => ...,  # the first block(s) of the file, to probe magic numbers
+  }
+
+Missing hints will be pulled from L</input> if possible.  The two-argument form was the previous
+calling convention.
+
+The return value is the best guess of module name and constructor arguments that
 should be used to parse the file.  However, this doesn't guarantee such module actually exists
-or is installed; it might just echo the file extension back to you.
+or is installed; it might just echo the file extension back to you.  (which could be useful if
+you write your own Decoder subclass with that name)
 
 =cut
 
 sub detect_input_format {
-	my ($self, $filename, $magic)= @_;
-
+	my $self= shift;
+	my ($filename, $magic, $headers, $ct, $charset);
+	if (@_ == 1 && ref $_[0] eq 'HASH') {
+		($filename, $magic, $headers, $ct, $charset)
+		  = @{$_[0]}{qw( filename content_head http_headers content_type charset )};
+		$ct= lc($ct) if defined $ct;
+	} elsif (@_) {
+		($filename, $magic)= @_;
+	}
 	my $input= $self->input;
+
 	# As convenience to spreadsheet users, let input be a parsed workbook/worksheet object.
 	return ('XLSX', sheet => $input)
 		if ref($input) && ref($input)->can('get_cell');
 	return ('XLSX', workbook => $input)
 		if ref($input) && ref($input)->can('worksheets');
-	# Convenience for passing already-parsed data
+
+	# Convenience for passing already-parsed data as an array of arrays
 	if (ref($input) eq 'ARRAY') {
 		# if user supplied single table of data, wrap it in an array to make an array of tables.
 		$input= [ $input ]
 			if @$input && ref($input->[0]) eq 'ARRAY'
 			&& @{$input->[0]} && ref($input->[0][0]) ne 'ARRAY';
 		return ('Mock', datasets => $input);
+	}
+
+	# Support for web framework upload objects
+	if (!$headers && ref($input) =~ /::Upload/ && $input->can('headers')) {
+		# Catalyst and Plack have ->headers => HTTP::Headers, though in plack the ->headers is
+		#  not documented....
+		# Dancer & Dancer2 has ->headers => HASH
+		# Mojo has ->headers => Mojo::Headers
+		$headers= $input->headers;
+	}
+	# the full content-type header, where the user-supplied '$ct' may only be the portion before ';'
+	my $full_ct= defined $ct && $ct =~ /;/ ? $ct : undef;
+	if (!defined $full_ct && $headers) {
+		# Dancer uses hashref of headers, case-normalized
+		if (ref $headers eq 'HASH') {
+			my $ct_key= defined $headers->{'Content-Type'}? 'Content-Type'
+						 : (grep /^content[-_]type\z/i, keys %$headers)[0];
+			$full_ct= $headers->{$ct_key} if $ct_key;
+		}
+		# HTTP::Headers object or Mojo::Headers object
+		elsif (blessed($headers) && $headers->can('header')) {
+			$full_ct= $headers->header('Content-Type');
+		}
+	}
+	# Extract charset and content type from 
+	if (defined $full_ct) {
+		$ct= lc($1) if !defined $ct && $full_ct =~ /^\s*([^;\s]+)/;
+		if (!defined $charset && $full_ct =~ /; *charset=(?:"((?:[^"\\]|\\.)*)"|([^;\S]+))/i) {
+			# Could remove the '\\' escapes, but any value that has escapes will be an invalid
+			# charset anyway.
+			if (my $enc= Encode::find_encoding($1)) {
+				$charset= $end->name;
+			} else {
+				$self->_log->('notice', "Unknown encoding in Content-Type $full_ct");
+			}
+		}
+	}
+
+	# Trust the content type
+	if (defined $ct) {
+		my @args;
+		my $class= $ct eq 'application/vnd.ms-excel'? 'XLS'
+		         : $ct eq 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'? 'XLSX'
+		         : $ct eq 'text/csv'? 'CSV'
+		         : $ct eq 'text/tab-separated-values'? 'TSV'
+		         : do { $self->_log->('notice', "Unknown content type '$ct'"); undef; };
+		if ($class) {
+			if ($class eq 'CSV' || $class eq 'TSV') {
+				# Use the MIME declared charset to read the stream
+				if (defined $charset && find_encoding($charset)) {
+					push @args, encoding => $charset;
+				}
+			}
+			return ($class, @args);
+		}
 	}
 
 	# Load first block of file, unless supplied
@@ -612,7 +721,7 @@ sub detect_input_format {
 		.(!defined $fpos? "unseekable file handle" : "no content");
 
 	# HTML is pretty obvious
-	return 'HTML' if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?<(!DOCTYPE )HTML/i;
+	return 'HTML' if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?<(!DOCTYPE )?HTML/i;
 	# Else guess between CSV and TSV
 	my ($probably_csv, $probably_tsv)= (0,0);
 	++$probably_csv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[-\w. ]+["']?,/;
