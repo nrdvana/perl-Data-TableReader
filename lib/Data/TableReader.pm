@@ -551,6 +551,11 @@ sub _log_fn {
 		$msg= sprintf($msg, @args) if @args;
 		warn $msg."\n";
 	}
+	: ref($dest) eq 'CODE'? sub {
+		my ($level, $msg, @args)= @_;
+		$msg= sprintf($msg, @args) if @args;
+		$dest->($level, $msg);
+	}
 	: ref $dest eq 'ARRAY'? sub {
 		my ($level, $msg, @args)= @_;
 		return unless $level eq 'warn' or $level eq 'error';
