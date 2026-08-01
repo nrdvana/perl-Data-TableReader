@@ -574,8 +574,8 @@ sub _log_fn {
 
 =head2 detect_input_format
 
-   my ($class, @args)= $tr->detect_input_format(\%hints);
-   my ($class, @args)= $tr->detect_input_format( $filename, $head_of_file );
+   my ($decoder_class, @args)= $tr->detect_input_format(\%hints);
+   my ($decoder_class, @args)= $tr->detect_input_format( $filename, $head_of_file );
 
 This is used internally to detect the format of a file, but you can call it manually if you
 like.  The following hints can be supplied as a hashref:
@@ -585,28 +585,93 @@ like.  The following hints can be supplied as a hashref:
 	 charset      => ...,  # a character set, as seen in charset=X on a MIME type
     filename     => ...,  # filename, using file extension to guess content-type
 	 content_head => ...,  # the first block(s) of the file, to probe magic numbers
+	 content_ofs  => ...,  # a byte offset from which the input file should be read
   }
 
-Missing hints will be pulled from L</input> if possible.  The two-argument form was the previous
-calling convention.
+Missing hints will be pulled from L</input> if possible, updating the supplied hashref.
+The two-argument form was the previous calling convention, and doesn't provide a way to retrieve
+the generated hint values.
 
 The return value is the best guess of module name and constructor arguments that
 should be used to parse the file.  However, this doesn't guarantee such module actually exists
 or is installed; it might just echo the file extension back to you.  (which could be useful if
 you write your own Decoder subclass with that name)
 
+On failure, it returns an empty list.
+
 =cut
+
+# Routine to lazily load first block of file
+sub _get_content_head {
+	my ($self, $hints)= @_;
+	unless (exists $hints->{content_head}) {
+		my $fh= $self->_file_handle;
+		# Need to be able to seek.
+		if (seek($fh, 0, 1)) {
+			my $fpos= tell $fh;
+			defined read($fh, my $buf, 4096) or croak "read: $!";
+			defined seek($fh, $fpos, 0) or croak "seek: $!";
+			$hints->{content_head}= $buf;
+		}
+		elsif ($fh->can('ungets')) {
+			defined read($fh, my $buf, 4096) or croak "read: $!";
+			$fh->ungets($buf);
+			$hints->{content_head}= $buf;
+		}
+		else {
+			$self->_log->('notice',"Can't fully detect input format because handle is not seekable."
+				." Consider fully buffering the file, or using FileHandle::Unget");
+			$hints->{content_head}= undef;
+		}
+	}
+	$hints->{content_head};
+}
+
+sub _get_content_head_text {
+	my ($self, $hints)= @_;
+	unless (defined $hints->{content_head_text}) {
+		$self->_get_content_head($hints)
+			unless $hints->{content_head};
+		$self->detect_input_charset($hints)
+			unless defined $hints->{charset};
+		my $text= substr($hints->{content_head}, $hints->{content_ofs}||0);
+		$text= Encode::decode($hints->{charset}, $text) if defined $hints->{charset};
+		$hints->{content_head_text}= $text;
+	}
+	$hints->{content_head_text};
+}
+
+our @_decoder_classes;
+
+our %_decoder_mime_types= (
+	'text/csv'                         => 'CSV',
+	'text/tab-separated-values'        => 'TSV',
+	'application/vnd.ms-excel'         => 'XLS',
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'XLSX',
+	# commonly used incorrect mime types according to AI
+	'application/csv'                  => 'CSV',
+	'application/x-csv'                => 'CSV',
+	'text/x-csv'                       => 'CSV',
+	'text/comma-separated-values'      => 'CSV',
+	'text/x-comma-separated-values'    => 'CSV',
+	'text/tsv'                         => 'TSV',
+	'application/tab-separated-values' => 'TSV',
+	'application/x-tsv'                => 'TSV',
+	'text/x-tsv'                       => 'TSV',
+	'application/msexcel'              => 'XLS',
+	'application/x-msexcel'            => 'XLS',
+	'application/excel'                => 'XLS',
+	'application/x-excel'              => 'XLS',
+	'application/vnd.ms-office'        => 'XLS',
+	'application/x-dos_ms_excel'       => 'XLS',
+	'application/xlsx'                 => 'XLSX',
+	'application/x-xlsx'               => 'XLSX',
+);
 
 sub detect_input_format {
 	my $self= shift;
-	my ($filename, $magic, $headers, $ct, $charset);
-	if (@_ == 1 && ref $_[0] eq 'HASH') {
-		($filename, $magic, $headers, $ct, $charset)
-		  = @{$_[0]}{qw( filename content_head http_headers content_type charset )};
-		$ct= lc($ct) if defined $ct;
-	} elsif (@_) {
-		($filename, $magic)= @_;
-	}
+	my $hints= @_ == 1 && ref $_[0] eq 'HASH'? $_[0]
+	         : { filename => $_[0], content_head => $_[1] };
 	my $input= $self->input;
 
 	# As convenience to spreadsheet users, let input be a parsed workbook/worksheet object.
@@ -624,11 +689,13 @@ sub detect_input_format {
 		return ('Mock', datasets => $input);
 	}
 
+	my ($headers, $ct, $charset)= @{$hints}{qw( http_headers content_type charset )};
+
 	# Support for web framework upload objects
-	if (!$headers && ref($input) =~ /::Upload/ && $input->can('headers')) {
+	if (!$headers && blessed($input) && $input->can('headers')) {
 		# Catalyst and Plack have ->headers => HTTP::Headers, though in plack the ->headers is
 		#  not documented....
-		# Dancer & Dancer2 has ->headers => HASH
+		# Dancer & Dancer2 have ->headers => HASH
 		# Mojo has ->headers => Mojo::Headers
 		$headers= $input->headers;
 	}
@@ -645,102 +712,177 @@ sub detect_input_format {
 		elsif (blessed($headers) && $headers->can('header')) {
 			$full_ct= $headers->header('Content-Type');
 		}
+		$full_ct= lc($full_ct) if defined $full_ct;
 	}
-	# Extract charset and content type from 
-	if (defined $full_ct) {
-		$ct= lc($1) if !defined $ct && $full_ct =~ /^\s*([^;\s]+)/;
-		if (!defined $charset && $full_ct =~ /; *charset=(?:"((?:[^"\\]|\\.)*)"|([^;\S]+))/i) {
+	# Extract charset and content type from full content-type header.
+	# But, don't if the user supplied a content-type value and it doesn't match the HTTP header.
+	if (defined $full_ct && $full_ct =~ /^\s*([^;\s]+)/ && (!defined $ct || $ct eq $full_ct || $ct eq $1)) {
+		$ct= $1;
+		if (!defined $charset && $full_ct =~ /;\s*charset\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;\s]+))/i) {
 			# Could remove the '\\' escapes, but any value that has escapes will be an invalid
 			# charset anyway.
-			if (my $enc= Encode::find_encoding($1)) {
-				$charset= $end->name;
-			} else {
-				$self->_log->('notice', "Unknown encoding in Content-Type $full_ct");
-			}
+			$charset= defined $1? $1 : $2;
+		}
+	}
+	if (defined $charset) {
+		if (my $enc= Encode::find_encoding($charset)) {
+			$charset= $enc->name;
+		} else {
+			$self->_log->('notice', "Unknown character encoding '$charset'");
+			undef $charset;
 		}
 	}
 
 	# Trust the content type
-	if (defined $ct) {
-		my @args;
-		my $class= $ct eq 'application/vnd.ms-excel'? 'XLS'
-		         : $ct eq 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'? 'XLSX'
-		         : $ct eq 'text/csv'? 'CSV'
-		         : $ct eq 'text/tab-separated-values'? 'TSV'
-		         : do { $self->_log->('notice', "Unknown content type '$ct'"); undef; };
+	if (defined $ct && length $ct) {
+		my $class= $_decoder_mime_types{$ct};
 		if ($class) {
-			if ($class eq 'CSV' || $class eq 'TSV') {
-				# Use the MIME declared charset to read the stream
-				if (defined $charset && find_encoding($charset)) {
-					push @args, encoding => $charset;
-				}
+			my @args;
+			($class, @args)= @$class if ref $class eq 'ARRAY';
+			if ($class eq 'CSV' || $class eq 'TSV' || $class eq 'HTML') {
+				# Use the MIME declared charset to read the stream.  If the content type wasn't
+				# declared, it is up to the module to detect something appropriate.
+				push @args, encoding => $charset
+					if defined $charset;
 			}
 			return ($class, @args);
+		} else {
+			$self->_log->('notice', "Unknown content type '$ct'");
 		}
 	}
 
-	# Load first block of file, unless supplied
-	my $fpos;
-	if (!defined $magic) {
-		my $fh= $self->_file_handle;
-		# Need to be able to seek.
-		if (seek($fh, 0, 1)) {
-			$fpos= tell $fh;
-			read($fh, $magic, 4096);
-			seek($fh, $fpos, 0) or croak "seek: $!";
-		}
-		elsif ($fh->can('ungets')) {
-			$fpos= 0; # to indicate that we did try reading the file
-			read($fh, $magic, 4096);
-			$fh->ungets($magic);
-		}
-		else {
-			$self->_log->('notice',"Can't fully detect input format because handle is not seekable."
-				." Consider fully buffering the file, or using FileHandle::Unget");
-			$magic= '';
-		}
+	@{$hints}{qw( http_headers content_type charset )}= ($headers, $ct, $charset);
+
+	# Consult any registered decoders first
+	for my $cls (grep $_->can('detect_input_format'), @_decoder_classes) {
+		my @answer= $cls->detect_input_format($self, $hints);
+		return @answer if @answer;
 	}
+
+	# Lacking a content-type, fall back to probing the contents of the file.
+	my $content_head= $self->_get_content_head($hints);
 
 	# Excel is obvious so check it first.  This handles cases where an excel file is
 	# erroneously named ".csv" and sillyness like that.
-	return ( 'XLSX' ) if $magic =~ /^PK(\x03\x04|\x05\x06|\x07\x08)/;
-	return ( 'XLS'  ) if $magic =~ /^\xD0\xCF\x11\xE0/;
+	return ( 'XLSX' ) if $content_head =~ /^PK(\x03\x04|\x05\x06|\x07\x08)/;
+	return ( 'XLS'  ) if $content_head =~ /^\xD0\xCF\x11\xE0/;
 
-	# Else trust the file extension, because TSV with commas can be very similar to CSV with
-	# tabs in the data, and some crazy person might store an HTML document as the first element
-	# of a CSV file.
+	# Remaining options are CSV, TSV, and HTML.  Trust the file extension, because TSV with
+	# commas can be very similar to CSV with tabs in the data, and some crazy person might store
+	# an HTML document as the first element of a CSV file.
 	# Detect filename if not supplied
-	if (!defined $filename) {
-		$filename= '';
-		$filename= "$input" if defined $input and (!ref $input || ref($input) =~ /path|file/i);
-	}
-	if ($filename =~ /\.([^.]+)$/) {
-		my $suffix= uc($1);
-		return 'HTML' if $suffix eq 'HTM';
-		return $suffix;
+	my $filename= defined $hints->{filename}? $hints->{filename}
+	            : defined $input && (!ref $input || ref($input) =~ /Path|File/)? "$input"
+	            : '';
+	if ($filename =~ /\.(
+		  csv   (?{"CSV"})
+		| tsv   (?{"TSV"})
+		| html? (?{"HTML"})
+	)\z/xi) {
+		return ($^R, defined $charset? (encoding => $charset) : ());
 	}
 
-	# Else probe some more...
-	$self->_log->('debug',"Probing file format because no filename suffix");
-	length $magic or croak "Can't probe format. No filename suffix, and "
-		.(!defined $fpos? "unseekable file handle" : "no content");
+	# Try to decide between CSV or TSV or HTML based on content alone.
+	# To do this, we also have to guess the content-type if it wasn't supplied.
+	if (defined $content_head && length $content_head) {
+		$self->_log->('debug',"Probing file format because no known filename suffix");
+	} else {
+		my $reason= defined $content_head? "empty file" : "unseekable file handle";
+		$self->_log->('debug',"Can't probe $reason");
+		return ();
+	}
+	$charset= $self->detect_input_charset($hints)
+		unless defined $charset;
+	my $text= $self->_get_content_head_text($hints);
 
-	# HTML is pretty obvious
-	return 'HTML' if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?<(!DOCTYPE )?HTML/i;
+	# HTML is pretty obvious.  Look for either <html> or <!doctype html>
+	return ( 'HTML', defined $charset? (encoding => $charset) : ())
+		if $text =~ /^<(?:!DOCTYPE\s+)?HTML\b/i;
+
 	# Else guess between CSV and TSV
 	my ($probably_csv, $probably_tsv)= (0,0);
-	++$probably_csv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[-\w. ]+["']?,/;
-	++$probably_tsv if $magic =~ /^(\xEF\xBB\xBF|\xFF\xFE|\xFE\xFF)?["']?[-\w. ]+["']?\t/;
-	my $comma_count= () = ($magic =~ /,/g);
-	my $tab_count= () = ($magic =~ /\t/g);
-	my $eol_count= () = ($magic =~ /\n/g);
+	++$probably_csv if $text =~ /^("(?:[^"]|"")*"|[^,"]+),/;   # first field appears terminated with comma
+	++$probably_tsv if $text =~ /^("(?:[^"]|"")*"|[^\t"]+)\t/; # first field appears terminated with tab
+	my $comma_count= () = ($text =~ /,/g);
+	my $tab_count= () = ($text =~ /\t/g);
+	my $eol_count= () = ($text =~ /\n/g);
 	++$probably_csv if $comma_count >= $eol_count and $comma_count > $tab_count;
 	++$probably_tsv if $tab_count >= $eol_count and $tab_count > $comma_count;
 	$self->_log->('debug', 'probe results: comma_count=%d tab_count=%d eol_count=%d probably_csv=%d probably_tsv=%d',
 		$comma_count, $tab_count, $eol_count, $probably_csv, $probably_tsv);
-	return 'CSV' if $probably_csv and $probably_csv > $probably_tsv;
-	return 'TSV' if $probably_tsv and $probably_tsv > $probably_csv;
-	croak "Can't determine file format";
+	my $class= $probably_csv && $probably_csv > $probably_tsv? 'CSV'
+	         : $probably_tsv && $probably_tsv > $probably_csv? 'TSV'
+	         : undef;
+	return () unless $class;
+	return ($class, $charset? (encoding => $charset) : ());
+}
+
+=head2 detect_input_charset
+
+   my $charset= $tr->detect_input_charset(\%hints);
+
+This is used internally to detect the text encoding of a file, but you can call it manually if
+you like.  The following hints can be supplied as a hashref:
+
+  { charset      => ...,  # a character set, as seen in charset=X on a MIME type
+	 content_head => ...,  # the first block(s) of the file
+	 content_ofs  => ...,  # byte offset from which detection should start
+  }
+
+Missing hints will be pulled from L</input> if possible, modifying the supplied hashref.
+
+The return value is the best guess of C<charset>.  This is also written into
+C<< $hints->{charset} >>.  If the content started with a byte-order-mark (BOM) the length of the
+BOM will be added to C<< $hints->{content_ofs} >>.  If an initial value for C<charset> disagrees
+with the BOM, it generates a warning, and updates to the new value.
+
+On failure, it returns undef.
+
+=cut
+
+sub detect_input_charset {
+	my ($self, $hints)= @_;
+	# Before trying to detect text formats, decode the charset, or try to detect it.
+	$self->_get_content_head($hints);
+	my ($charset, $ofs)= ($hints->{charset}, $hints->{content_ofs});
+	# Check for explicit byte-order-mark
+	pos($hints->{content_head})= $ofs || 0;
+	if ($hints->{content_head} =~ /\G(?:
+		  \xFF\xFE\x00\x00  (?{"UTF-32LE"})
+		| \x00\x00\xFE\xFF  (?{"UTF-32BE"})
+		| \xFF\xFE          (?{"UTF-16LE"})
+		| \xFE\xFF          (?{"UTF-16BE"})
+		| \xEF\xBB\xBF      (?{"UTF-8"})
+	)/xgc) {
+		$self->_log->('warn',"Data contains ${^MARK} BOM that disagrees with declared charset=$charset")
+			if $charset && $charset ne ${^MARK};
+		$charset= $^R;
+		$ofs= $+[0];
+	}
+	if (!$charset) {
+		# Other heuristics: a CSV or TSV likely begin with a line of headers,
+		# and the headers are likely ascii identifier strings even if the data
+		# contains lots of non-english.  Also HTML and JSON begin with at least
+		# 2 ascii chars.
+		if ($hints->{content_head} =~ /\G(?:
+			  (?:[\t\n\x20-\x7E]\0\0\0){2} (?{"UTF-32LE"})  # ascii char x2
+			| (?:\0\0\0[\t\n\x20-\x7E]){2} (?{"UTF-32BE"})  # ascii char x2
+			| (?:[\t\n\x20-\x7E]\0){2}     (?{"UTF-16LE"})  # ascii char x2
+			| (?:\0[\t\n\x20-\x7E]){2}     (?{"UTF-16BE"})  # ascii char x2
+		)/gc) {
+			$charset= $^R;
+		}
+		# any buffer that has NULs in it is likely 16/32 encoded.  Look for a newline.
+		elsif ($hints->{content_head} =~ /\G.*?\0/) {
+			$charset= $hints->{content_head} =~ /\G(....)*?\n\0\0\0/gcs? 'UTF-32LE'
+			        : $hints->{content_head} =~ /\G(....)*?\0\0\0\n/gcs? 'UTF-32BE'
+			        : $hints->{content_head} =~ /\G(..)*?\n\0/gcs?       'UTF-16LE'
+			        : $hints->{content_head} =~ /\G(..)*?\0\n/gcs?       'UTF-16BE'
+			        : undef;
+		}
+	}
+	($hints->{charset}, $hints->{content_ofs})= ($charset, $ofs);
+	return $charset;
 }
 
 =head2 find_table
