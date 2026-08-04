@@ -1519,7 +1519,13 @@ sub iterator {
 	@trim= values %trimmer;
 
 	return Data::TableReader::_RecIter->new(
-		$sub, { data_iter => $data_iter, reader => $self },
+		$sub, {
+			data_iter => $data_iter,
+			reader => $self,
+			n_blank => \$n_blank,
+			first_blank => \$first_blank,
+			eof => \$eof,
+		},
 	);
 }
 
@@ -1654,7 +1660,7 @@ BEGIN { @Data::TableReader::_RecIter::ISA= ( 'Data::TableReader::Iterator' ) }
 sub Data::TableReader::_RecIter::all {
 	my $self= shift;
 	my (@rec, $x);
-	push @rec, $x while ($x= $self->());
+	push @rec, $x while defined($x= $self->());
 	return \@rec;
 }
 sub Data::TableReader::_RecIter::dataset_idx {
@@ -1670,10 +1676,20 @@ sub Data::TableReader::_RecIter::progress {
 	shift->_fields->{data_iter}->progress(@_);
 }
 sub Data::TableReader::_RecIter::tell {
-	shift->_fields->{data_iter}->tell(@_);
+	my $fields= shift->_fields;
+	my $dec_pos= $fields->{data_iter}->tell;
+	return [ $dec_pos, ${$fields->{eof}}, ${$fields->{first_blank}}, ${$fields->{n_blank}} ];
 }
 sub Data::TableReader::_RecIter::seek {
-	shift->_fields->{data_iter}->seek(@_);
+	my ($self, $state)= @_;
+	my $fields= $self->_fields;
+	@$state == 4 or croak "Expected arrayref of 4 elements, as returned by ->tell";
+	my ($dec_pos, $eof, $first_blank, $n_blank)= @$state;
+	$fields->{data_iter}->seek($dec_pos);
+	${$fields->{eof}}= $eof;
+	${$fields->{first_blank}}= $first_blank;
+	${$fields->{n_blank}}= $n_blank;
+	return $self;
 }
 sub Data::TableReader::_RecIter::next_dataset {
 	shift->_fields->{reader}->_log
