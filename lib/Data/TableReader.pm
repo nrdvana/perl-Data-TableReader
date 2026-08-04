@@ -683,13 +683,14 @@ sub _get_content_head {
 
 sub _get_content_head_text {
 	my ($self, $hints)= @_;
-	unless (defined $hints->{content_head_text}) {
-		$self->_get_content_head($hints)
-			unless $hints->{content_head};
-		$self->detect_input_charset($hints)
-			unless defined $hints->{charset};
-		my $text= substr($hints->{content_head}, $hints->{content_ofs}||0);
-		$text= Encode::decode($hints->{charset}, $text) if defined $hints->{charset};
+	unless (exists $hints->{content_head_text}) {
+		my $text;
+		if (defined $self->_get_content_head($hints)) {
+			$self->detect_input_charset($hints)
+				unless defined $hints->{charset};
+			$text= substr($hints->{content_head}, $hints->{content_ofs}||0);
+			$text= Encode::decode($hints->{charset}, $text) if defined $hints->{charset};
+		}
 		$hints->{content_head_text}= $text;
 	}
 	$hints->{content_head_text};
@@ -727,6 +728,9 @@ sub detect_input_format {
 	my $hints= @_ == 1 && ref $_[0] eq 'HASH'? $_[0]
 	         : { filename => $_[0], content_head => $_[1] };
 	my $input= $self->input;
+	# this and all related routines want a lowercase content type
+	$hints->{content_type}= lc($hints->{content_type})
+		if defined $hints->{content_type};
 
 	# As convenience to spreadsheet users, let input be a parsed workbook/worksheet object.
 	return ('XLSX', sheet => $input)
@@ -817,9 +821,11 @@ sub detect_input_format {
 	my $content_head= $self->_get_content_head($hints);
 
 	# Excel is obvious so check it first.  This handles cases where an excel file is
-	# erroneously named ".csv" and sillyness like that.
-	return ( 'XLSX' ) if $content_head =~ /^PK(\x03\x04|\x05\x06|\x07\x08)/;
-	return ( 'XLS'  ) if $content_head =~ /^\xD0\xCF\x11\xE0/;
+	# erroneously named ".csv" and silliness like that.
+	if (defined $content_head) {
+		return ( 'XLSX' ) if $content_head =~ /^PK(\x03\x04|\x05\x06|\x07\x08)/;
+		return ( 'XLS'  ) if $content_head =~ /^\xD0\xCF\x11\xE0/;
+	}
 
 	# Remaining options are CSV, TSV, and HTML.  Trust the file extension, because TSV with
 	# commas can be very similar to CSV with tabs in the data, and some crazy person might store
@@ -895,8 +901,11 @@ On failure, it returns undef.
 
 sub detect_input_charset {
 	my ($self, $hints)= @_;
-	# Before trying to detect text formats, decode the charset, or try to detect it.
-	$self->_get_content_head($hints);
+	# Need to have the content_head available
+	unless (defined $self->_get_content_head($hints)) {
+		$hints->{charset}= undef unless exists $hints->{charset};
+		return undef;
+	}
 	my ($charset, $ofs)= ($hints->{charset}, $hints->{content_ofs});
 	# Check for explicit byte-order-mark
 	pos($hints->{content_head})= $ofs || 0;
@@ -905,10 +914,10 @@ sub detect_input_charset {
 		| \x00\x00\xFE\xFF  (?{"UTF-32BE"})
 		| \xFF\xFE          (?{"UTF-16LE"})
 		| \xFE\xFF          (?{"UTF-16BE"})
-		| \xEF\xBB\xBF      (?{"UTF-8"})
+		| \xEF\xBB\xBF      (?{"utf-8-strict"})
 	)/xgc) {
-		$self->_log->('warn',"Data contains ${^MARK} BOM that disagrees with declared charset=$charset")
-			if $charset && $charset ne ${^MARK};
+		$self->_log->('warn',"Data contains $^R BOM that disagrees with declared charset=$charset")
+			if $charset && (Encode::find_encoding($charset)||0) != (Encode::find_encoding($^R)||0);
 		$charset= $^R;
 		$ofs= $+[0];
 	}

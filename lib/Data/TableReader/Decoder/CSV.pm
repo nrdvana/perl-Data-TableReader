@@ -98,16 +98,23 @@ PerlIO layer on the file handle, possibly skipping detection.
 
 has autodetect_encoding => ( is => 'rw', default => sub { 1 } );
 
+sub BUILD {
+	my ($self, $args)= @_;
+	$self->encoding($args->{encoding}) if defined $args->{encoding};
+}
+
 sub encoding {
 	my ($self, $enc)= @_;
 	my $fh= $self->file_handle;
 	if (defined $enc) {
+		# protect against binmode string injection
+		croak "invalid/unknown encoding '$enc'" unless Encode::find_encoding($enc);
 		binmode($fh, ":encoding($enc)");
 		return $enc;
 	}
 	
 	my @layers= PerlIO::get_layers($fh);
-	if (($enc)= grep { /^encoding|^utf/ } @layers) {
+	if (($enc)= grep { /^encoding|^utf/i } @layers) {
 		# extract encoding name
 		return 'UTF-8' if $enc eq 'utf8';
 		return uc($1) if $enc =~ /encoding\(([^)]+)\)/;
