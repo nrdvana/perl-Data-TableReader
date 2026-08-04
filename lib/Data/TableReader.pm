@@ -234,7 +234,7 @@ Both generate warnings, but the header match can still proceed to a successful r
 
 Any ambiguities (field matching multiple columns, multiple fields matching a column) cause the
 match of the header on this row to fail.  Further attempts at finding the header depend on the
-L</on_partial_headers> setting.
+L</on_partial_match> setting.
 
 =back
 
@@ -243,7 +243,10 @@ L</on_partial_headers> setting.
   on_unknown_columns => 'warn'  # warn, and then accept these headers
   on_unknown_columns => 'error' # fail the header match for this row
   on_unknown_columns => sub {
-    my ($reader, $col_headers)= @_;
+    my ($reader, \@headers, \@unmatched, \%candidate)= @_;
+	 # @headers is an array of the header of each column
+	 # @unmatched is an array of which @header indices are unmatched
+	 # %candidate is the structure from ->table_search_results->{candidates}
     ...;
     return $opt; # one of the above values
   }
@@ -263,7 +266,7 @@ from this table.
 =item C<'error'>
 
 Extra columns mean that you didn't find the table you wanted.  Log the near-miss, and
-keep searching additional rows or additional tables, according to L</on_partial_headers>.
+keep searching additional rows or additional tables, according to L</on_partial_match>.
 
 =item C<sub {}>
 
@@ -272,13 +275,12 @@ return one of the above values.
 
 =back
 
-=head2 on_blank_rows
+=head2 on_blank_row
 
-  on_blank_rows => 'next' # warn, and then skip the row(s)
-  on_blank_rows => 'last' # warn, and stop iterating the table
-  on_blank_rows => 'die'  # fatal error
-  on_blank_rows => 'use'  # actually try to return the blank rows as records
-  on_blank_rows => sub {
+  on_blank_row => 'next' # warn, and then skip the row(s)
+  on_blank_row => 'last' # warn, and stop iterating the table
+  on_blank_row => 'die'  # fatal error
+  on_blank_row => sub {
     my ($reader, $first_blank_rownum, $last_blank_rownum)= @_;
     ...;
     return $opt; # one of the above values
@@ -1118,7 +1120,8 @@ sub _find_table {
 				if ($initial_colmap_count < scalar(grep defined, @{$attempt{col_map}})) {
 					# Handling of partial match determined by on_partial_match setting
 					my $act= $self->on_partial_match;
-					$act= $act->($self, \%attempt) if ref $act eq 'CODE';
+					$act= $act->($self, \%attempt, $vals)
+						if ref $act eq 'CODE';
 					last dataset
 						if $act eq 'last';
 				}
@@ -1303,7 +1306,7 @@ sub _match_headers_dynamic {
 	if (@unmatched) {
 		my $act= $self->on_unknown_columns;
 		my $unknown_list= join(', ', map $self->_fmt_header_text($header->[$_]), @unmatched);
-		$act= $act->($self, $header, \@unmatched) if ref $act eq 'CODE';
+		$act= $act->($self, $header, \@unmatched, $attempt) if ref $act eq 'CODE';
 		if ($act eq 'warn' || $act eq 'use') { # 'use' is back-compat, 'warn' is official now.
 			push @{$attempt->{messages}}, [ warn => 'Ignoring unknown columns: '.$unknown_list ];
 		} elsif ($act eq 'error' || $act eq 'next') { # 'next' is back-compat, 'error' is official now.
@@ -1637,6 +1640,7 @@ sub _handle_validation_error {
 		$self->_log->('error', $msg);
 		croak $msg;
 	}
+	croak "Invalid value for 'on_validation_error': \"$act\"";
 }
 
 # This is back-compat for the previous callback API which was an attribute named 'on_validation_fail'
