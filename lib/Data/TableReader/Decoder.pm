@@ -14,13 +14,18 @@ tags) then the decode should also support the "next_dataset" method.
 
 =head1 ATTRIBUTES
 
-=head2 filename
-
-Set by TableReader.  Useful for logging.
-
 =head2 file_handle
 
-Set by TableReader.  This is what the iterator should parse.
+This is what the iterator should parse.  Streams should work, but for best results use a
+seekable file handle.
+
+=head2 real_file_name
+
+Indicates real filename of C<file_handle>, or C<undef> if that can't be determined.
+
+=head2 client_file_name
+
+Indicates a client-side file name which should be used in client-facing log messages.
 
 =head1 METHODS
 
@@ -36,10 +41,20 @@ equivalent to the perl syntax
 
 =cut
 
-has file_name   => ( is => 'ro', required => 1 );
-has file_handle => ( is => 'ro', required => 1 );
-has _log        => ( is => 'ro', required => 1 );
+has file_handle      => ( is => 'ro', required => 1 );
+has real_file_name   => ( is => 'rw' );
+has client_file_name => ( is => 'rw' );
+*file_name= *real_file_name; # back-compat
+
+has _log             => ( is => 'ro', required => 1 );
 *log= *_log; # back-compat, but deprecated since it doesn't match ->log on TableReader
+
+sub BUILD {
+	my ($self, $args)= @_;
+	# Previous attribute name was 'file_name'
+	$self->real_file_name($args->{file_name})
+		if defined $args->{file_name} && !defined $self->real_file_name;
+}
 
 sub _first_sufficient_module {
 	my ($name, $modules, $req_versions)= @_;

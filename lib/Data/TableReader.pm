@@ -352,6 +352,8 @@ any message that would otherwise have gone to 'warn' or 'error'.
 
 has input               => ( is => 'rw', required => 1 );
 has _file_handle        => ( is => 'lazy' );
+has _real_file_name     => ( is => 'rw', lazy => 1, builder => 1, predicate => 1 );
+has _client_file_name   => ( is => 'lazy' );
 has _decoder_arg        => ( is => 'rw', init_arg => 'decoder' );
 has decoder             => ( is => 'lazy', init_arg => undef );
 has fields              => ( is => 'rw', required => 1, coerce => \&_coerce_field_list, trigger => \&_update_fields );
@@ -414,6 +416,43 @@ sub _resolve_colmap_names {
 	$col_map;
 }
 
+# Only consider it a "client"-facing filename if we have a definite method that
+# tells us this is true.
+sub _build__client_file_name {
+	my $self= shift;
+	my $i= $self->input;
+	if (my $cls= blessed($i)) {
+		# All major framework upload objects have this attribute in common
+		return $i->filename if $i->can('filename') && $cls =~ /::Upload/;
+	}
+	return undef;
+}
+
+sub _build__real_file_name {
+	my $self= shift;
+	my $i= $self->input;
+	if (my $cls= blessed($i)) {
+		return $i->filename if $cls->isa('File::Temp');
+		# Path::Tiny, Class::Path::File, etc.
+		require overload;
+		return "$i" if $cls =~ /File|Path/ && overload::Method($i, q{""});
+		# Support for Catalyst::Request::Upload, Dancer::Request::Upload,
+		# and Dancer2::Core::Request::Upload, all of which have 'tempname'.
+		return '' . $i->tempname
+			if $i->can('tempname') && defined $i->tempname;
+		# Mojo::Upload needs to refer to the asset
+		if ($cls->isa('Mojo::Upload')) {
+			$i= $i->asset;
+			$cls= blessed($i);
+		}
+		return '' . $i->path
+			if ($cls->isa('Plack::Request::Upload') || $cls->isa('Mojo::Asset::File'))
+			&& defined $i->path;
+	}
+	# plain scalars default to being the filename
+	return ref $i? undef : $i;
+}
+
 # Open 'input' if it isn't already a file handle
 sub _build__file_handle {
 	my $self= shift;
@@ -432,7 +471,7 @@ sub _build__file_handle {
 			# Support for Catalyst::Request::Upload, Dancer::Request::Upload,
 			# and Dancer2::Core::Request::Upload, all of which have 'tempname'.
 			if ($i->can('tempname') && defined $i->tempname) {
-				$i= $i->tempname;
+				$i= '' . $i->tempname;
 				$cls= '';
 			}
 			# Support Mojo::Upload
@@ -442,7 +481,7 @@ sub _build__file_handle {
 			}
 			# Support for Plack::Request::Upload
 			elsif ($cls->isa('Plack::Request::Upload')) {
-				$i= $i->path;
+				$i= '' . $i->path;
 				$cls= '';
 			}
 		}
@@ -457,6 +496,7 @@ sub _build__file_handle {
 
 	open(my $fh, '<', $i) or croak "open($i): $!";
 	binmode $fh;
+	$self->_real_file_name($i) if !ref $i && !$self->_has_real_file_name;
 	return $fh;
 }
 
@@ -494,12 +534,13 @@ sub _build_decoder {
 	}
 	$class= "Data::TableReader::Decoder::$class"
 		unless $class =~ /::/;
-	require_module($class) or croak "$class does not exist or is not installed";
+	require_module($class);
 	$self->_log->('trace', 'Creating decoder %s on input %s', $class, $self->input);
 	return $class->new(
-		file_name   => ($self->input eq ($self->_file_handle||"") ? '' : $self->input),
-		file_handle => $self->_file_handle,
-		_log        => $self->_log,
+		file_handle      => $self->_file_handle,
+		real_file_name   => $self->_real_file_name,
+		client_file_name => $self->_client_file_name,
+		_log             => $self->_log,
 		@args
 	);
 }
@@ -776,10 +817,9 @@ sub detect_input_format {
 	# commas can be very similar to CSV with tabs in the data, and some crazy person might store
 	# an HTML document as the first element of a CSV file.
 	# Detect filename if not supplied
-	my $filename= defined $hints->{filename}? $hints->{filename}
-	            : defined $input && (!ref $input || ref($input) =~ /Path|File/)? "$input"
-	            : '';
-	if ($filename =~ /\.(
+	$hints->{filename}= $self->_client_file_name unless defined $hints->{filename};
+	$hints->{filename}= $self->_real_file_name   unless defined $hints->{filename};
+	if (defined $hints->{filename} && $hints->{filename} =~ /\.(
 		  csv   (?{"CSV"})
 		| tsv   (?{"TSV"})
 		| html? (?{"HTML"})
