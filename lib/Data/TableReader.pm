@@ -616,8 +616,10 @@ sub _log_fn {
 	}
 	: ref($dest)->can('info')? sub {
 		my ($level, $msg, @args)= @_;
+		my $is_level= $dest->can('is_'.$level) or croak "Logger object lacks required 'is_$level' method";
+		# If it can("is_$level"), probably no sense wasting time checking for can($level)
 		$dest->$level( @args? sprintf($msg, @args) : $msg )
-			if $dest->can('is_'.$level)->($dest);
+			if $is_level->($dest);
 	}
 	: croak "Don't know how to log to $dest";
 }
@@ -671,7 +673,7 @@ sub _get_content_head {
 			$hints->{content_head}= $buf;
 		}
 		else {
-			$self->_log->('notice',"Can't fully detect input format because handle is not seekable."
+			$self->_log->('info',"Can't fully detect input format because handle is not seekable."
 				." Consider fully buffering the file, or using FileHandle::Unget");
 			$hints->{content_head}= undef;
 		}
@@ -780,7 +782,7 @@ sub detect_input_format {
 		if (my $enc= Encode::find_encoding($charset)) {
 			$charset= $enc->name;
 		} else {
-			$self->_log->('notice', "Unknown character encoding '$charset'");
+			$self->_log->('warn', "Unknown character encoding '$charset'");
 			undef $charset;
 		}
 	}
@@ -799,7 +801,7 @@ sub detect_input_format {
 			}
 			return ($class, @args);
 		} else {
-			$self->_log->('notice', "Unknown content type '$ct'");
+			$self->_log->('warn', "Unknown content type '$ct'");
 		}
 	}
 
