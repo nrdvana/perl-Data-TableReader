@@ -1058,7 +1058,7 @@ sub _find_table {
 	if (!defined $header_at) {
 		unless ($self->static_field_order) {
 			$result{fatal}= "You must enable 'static_field_order' if there is no header row";
-			return;
+			return \%result;
 		}
 		my $col_map= [ @{ $self->_supplied_col_map || \@fields } ];
 		$result{found}= {
