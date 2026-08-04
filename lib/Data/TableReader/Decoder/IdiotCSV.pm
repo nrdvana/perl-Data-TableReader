@@ -1,6 +1,5 @@
 package Data::TableReader::Decoder::IdiotCSV;
 use Moo 2;
-use Try::Tiny;
 use Carp;
 use Log::Any '$log';
 

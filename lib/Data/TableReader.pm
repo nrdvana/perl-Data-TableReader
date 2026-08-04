@@ -1,12 +1,12 @@
 package Data::TableReader;
 use Moo 2;
-use Try::Tiny;
 use Carp;
 use Scalar::Util qw( blessed refaddr );
 use List::Util 'max';
 use Module::Runtime 'require_module';
 use Data::TableReader::Field;
 use Data::TableReader::Iterator;
+use Encode ();
 use namespace::clean;
 
 # ABSTRACT: Extract records from "dirty" tabular data sources
@@ -18,7 +18,7 @@ use namespace::clean;
   #   "address", "city", "state", "zip" (in any order)
   # and then convert each row under that into a hashref of those fields.
   
-  my $records= Data::TableReader>new(
+  my $records= Data::TableReader->new(
       input => 'path/to/file.xlsx',
       fields => [qw( address city state zip )],
     )
@@ -124,6 +124,10 @@ of C<field_list>.
 Map of C<< { refaddr($field) => $field } >>.
 
 =back
+
+If you need to, you can supply an empty list of fields and then update the attribute later.
+(Be sure to write via the accessor rather than modify the arrayref.)  This can be useful if you
+want to use the input detection features before sorting out the details of which fields to use.
 
 =head2 record_class
 
@@ -337,7 +341,7 @@ C<warn "$message\n">.  If set to an object, it should support an API of:
   warn,   is_warn
   error,  is_error
 
-such as L<Log::Any> and may other perl logging modules use.  You can also
+such as L<Log::Any> and many other perl logging modules use.  You can also
 set it to a coderef such as:
 
   my @messages;
@@ -958,7 +962,7 @@ sub _build_table_search_results {
 	my $result= $self->_find_table($self->decoder->iterator);
 	# When called during lazy-build, not finding the table is fatal
 	if (!$result->{found}) {
-		my $err= $$result->{fatal} || "Can't locate valid header";
+		my $err= $result->{fatal} || "Can't locate valid header";
 		$self->_log->('error', $err);
 		croak $err;
 	}
@@ -1199,8 +1203,8 @@ sub _match_headers_dynamic {
 		if (!@found_idx && $f->required) {
 			push @{$attempt->{missing_required}}, $f;
 			push @{$attempt->{messages}}, [ error => 'No match for required field '.$f->name ];
-			# Missing required fields probably means this isn't he header row, or the input is
-			# garbage, so might as well stop here before genering a bunch of analysis.
+			# Missing required fields probably means this isn't the header row, or the input is
+			# garbage, so might as well stop here before generating a bunch of analysis.
 			last;
 		}
 	}
@@ -1401,7 +1405,7 @@ sub iterator {
 	my @output_keys;  # list of hash key names where values get stored
 	my @array_ranges; # list of value indices that get bundled into an arrayref
 	my @blank_val;    # blank value per each fetched column
-	my @trim;         # list of trim functions and the value indicies they should be applied to
+	my @trim;         # list of trim functions and the value indices they should be applied to
 	my @type_check;   # list of validation coderefs that should be applied
 	my $class;        # optional object class to construct for the resulting rows
 	my ($n_blank, $first_blank, $eof);

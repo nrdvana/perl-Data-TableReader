@@ -1,7 +1,6 @@
 package Data::TableReader::Decoder::XLSX;
 use Moo 2;
 use Carp;
-use Try::Tiny;
 extends 'Data::TableReader::Decoder::Spreadsheet';
 
 our @xlsx_probe_modules= ( [ 'Spreadsheet::ParseXLSX', '0.30' ], 'Spreadsheet::XLSX' );

@@ -1,6 +1,5 @@
 package Data::TableReader::Decoder::CSV;
 use Moo 2;
-use Try::Tiny;
 use Carp;
 use IO::Handle;
 extends 'Data::TableReader::Decoder';

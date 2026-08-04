@@ -1,7 +1,6 @@
 package Data::TableReader::Iterator;
 use strict;
 use warnings;
-use Try::Tiny;
 use Carp;
 use Scalar::Util 'refaddr';
 
