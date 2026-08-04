@@ -152,18 +152,18 @@ to undef if you also set C<< static_field_order => 1 >>.
 This is an arrayref, one element per column of input data, listing which field was detected
 to come from that column.  If you specify this to the constructor, L</find_table> will respect
 any defined element of the array, but still search for matching headers in the undefined
-columns.  After a successful L</find_table>, C<col_map> is changed to refer to the same hash as
-C<< ->table_search_results->{found}{col_map} >>.  (If you wanted to re-run the search for the
-table, you need to both C<clear_table_search_results> I<and> reset C<col_map> to whatever
-you passed to the constructor.)
+columns.  After a successful L</find_table>, the C<col_map> accessor refers to the same array as
+C<< ->table_search_results->{found}{col_map} >>.  If you call C<clear_table_search_results>,
+the C<col_map> accessor returns to the previous value.
 
 For backward compatibility, if you did not specify this attribute to the constructor and try
 accessing it before calling L</find_table>, it automatically calls L</find_table> for you
-(and die if it fails).
+(and dies if it fails).
 
 =head2 has_col_map
 
-Check whether col_map has been defined, to avoid lazy-building it.
+Returns true if you assigned an initial value to col_map, or if a value was determined by
+table_search_results.
 
 =head2 table_search_results
 
@@ -354,16 +354,16 @@ has input               => ( is => 'rw', required => 1 );
 has _file_handle        => ( is => 'lazy' );
 has _decoder_arg        => ( is => 'rw', init_arg => 'decoder' );
 has decoder             => ( is => 'lazy', init_arg => undef );
-has fields              => ( is => 'rw', required => 1, coerce => \&_coerce_field_list );
+has fields              => ( is => 'rw', required => 1, coerce => \&_coerce_field_list, trigger => \&_update_fields );
 sub field_list             { @{ shift->fields } }
-has field_by_name       => ( is => 'lazy' );
-has field_by_addr       => ( is => 'lazy' );
+has field_by_name       => ( is => 'lazy', clearer => 1 );
+has field_by_addr       => ( is => 'lazy', clearer => 1 );
 has record_class        => ( is => 'rw', required => 1, default => sub { 'HASH' } );
 has static_field_order  => ( is => 'rw' ); # force order of columns
 has header_row_at       => ( is => 'rw', default => sub { [1,10] } ); # row of header, or range to scan
-has header_row_combine  => ( is => 'rw', lazy => 1, builder => 1 );
+has header_row_combine  => ( is => 'rw', lazy => 1, builder => 1, clearer => 1 );
 has table_search_results=> ( is => 'rw', lazy => 1, builder => 1, clearer => 1, predicate => 1 );
-has col_map             => ( is => 'rw', lazy => 1, builder => 1, predicate => 1 );
+has col_map             => ( is => 'rw', reader => '_get_col_map', writer => '_set_col_map' );
 has on_partial_match    => ( is => 'rw', default => sub { 'next' } );
 has on_ambiguous_columns=> ( is => 'rw', default => sub { 'error' } );
 has on_unknown_columns  => ( is => 'rw', default => sub { 'warn' } );
@@ -371,13 +371,17 @@ has on_blank_row        => ( is => 'rw', default => sub { 'next' } );
 has on_validation_error => ( is => 'rw', default => sub { 'die' } );
 has log                 => ( is => 'rw', trigger => sub { shift->_clear_log } );
 
+sub _update_fields {
+	my $self= shift;
+	# clear derived attributes
+	$self->clear_field_by_name;
+	$self->clear_field_by_addr;
+	$self->clear_header_row_combine;
+	$self->clear_table_search_results;
+}
+
 sub BUILD {
 	my ($self, $args)= @_;
-	# If user supplied col_map, it probably contains names instead of Field objects.
-	if ($self->has_col_map) {
-		# Make a new array in case other parts of user code refer to current one
-		$self->col_map($self->_resolve_colmap_names([ @{ $self->col_map } ]));
-	}
 	# Back-compat for previous API
 	if (defined (my $act= $args->{on_validation_fail})) {
 		croak "on_validation_fail (back-compat alias) conflicts with on_validation_error"
@@ -401,9 +405,10 @@ sub on_validation_fail {
 # Modifies array to replace name with field ref
 sub _resolve_colmap_names {
 	my ($self, $col_map)= @_;
-	for (grep defined && !ref, @$col_map) {
-		defined(my $f= $self->field_by_name->{$_})
-			or croak("col_map specifies non-existent field '$_'");
+	for (grep defined, @$col_map) {
+		my $name= ref $_ && ref($_)->can('name')? $_->name : "$_";
+		defined(my $f= $self->field_by_name->{$name})
+			or croak("col_map specifies non-existent field '$name'");
 		$_= $f;
 	}
 	$col_map;
@@ -502,7 +507,7 @@ sub _build_decoder {
 # User supplies any old perl data, but this field should always be an arrayref of ::Field
 sub _coerce_field_list {
 	my ($list)= @_;
-	defined $list and ref $list eq 'ARRAY' or croak "'fields' must be a non-empty arrayref";
+	defined $list and ref $list eq 'ARRAY' or croak "'fields' must be an arrayref";
 	my @list= @$list; # clone it, to make sure we don't unexpectedly alter the caller's data
 	for (@list) {
 		if (!ref $_) {
@@ -535,7 +540,7 @@ sub _build_header_row_combine {
 	my $self= shift;
 	# If headers contain "\n", we need to collect multiple cells per column
 	# Find the maximum number of \n contained in any regex.
-	max map { 1+(()= ($_->header_regex =~ /\\n|\n/g)) } $self->field_list;
+	max 0, map { 1+(()= ($_->header_regex =~ /\\n|\n/g)) } $self->field_list;
 }
 
 # 'log' can be a variety of things, but '_log' will always be a coderef
@@ -918,12 +923,51 @@ sub _build_table_search_results {
 	$result;
 }
 
-sub _build_col_map {
-	shift->table_search_results->{found}{col_map}
+# The col_map attribute has some awkward back-compat.  It originally triggered a lazy-build
+# of ->find_table and stored the result.  Users could inspect and modify it afterward.
+# Then I added the ability to pass it to the constructor, and start from that initial value
+# to build the col_map for the table_search_results.  I probably should have used a new
+# attribute name like 'base_col_map' or something, but didn't.  The user-assigned value is now
+# the only thing stored in the attribute, not the built value, but the accessor returns the
+# built value if one exists before falling back to the stored value.
+sub col_map {
+	my $self= shift;
+	my $ret;
+	if (@_) {
+		if (@_ == 1 && !defined $_[0]) {
+			$self->_set_col_map($ret= undef);
+		} else {
+			@_ == 1 && ref $_[0] eq 'ARRAY' or croak 'Expected arrayref'; 
+			$self->_set_col_map($ret= $self->_resolve_colmap_names(shift));
+		}
+	} else {
+		my $supplied= $self->_get_col_map;
+		# lazy-build search results, like original API
+		$self->table_search_results unless defined $supplied;
+		$ret= ($self->has_table_search_results && $self->table_search_results->{found})? $self->table_search_results->{found}{col_map}
+			# supplied col_map might be using strings or stale/foreign field objects
+		    : $supplied? $self->_resolve_colmap_names($supplied)
+			 : undef;
+	}
+	return $ret;
+}
+# Accessor is documented to return true if an initial col_map was supplie,
+# or if a col_map has been derived by find_table.
+sub has_col_map {
+	my $self= shift;
+	defined $self->_get_col_map
+	or $self->has_table_search_results && $self->table_search_results->{found}
+}
+# Accessor for only the user-supplied list, but resolved to field objects
+sub _supplied_col_map {
+	my $self= shift;
+	my $supplied= $self->_get_col_map;
+	defined $supplied? $self->_resolve_colmap_names($supplied) : undef;
 }
 
 sub find_table {
 	my $self= shift;
+	$self->clear_table_search_results;
 	my $result= $self->_find_table($self->decoder->iterator);
 	$self->table_search_results($result);
 	return defined $result->{found};
@@ -947,25 +991,6 @@ sub _field_map {
 
 sub _find_table {
 	my ($self, $data_iter)= @_;
-#	$stash ||= {};
-#	while (1) {
-#		$success= $self->_find_table_in_dataset($data_iter, $stash);
-#		&& !defined $stash->{fatal}
-#		&& $data_iter->next_dataset
-#	) {}
-#	if ($success) {
-#		# And record the stream position of the start of the table
-#		$self->col_map($stash->{col_map});
-#		$stash->{first_record_pos}= $data_iter->tell;
-#		$stash->{data_iter}= $data_iter;
-#		return $stash;
-#	}
-#	else {
-#		my $err= $stash->{fatal} || "Can't locate valid header";
-#		$self->_log->('error', $err);
-#		croak $err if $stash->{croak_on_fail};
-#		return undef;
-#	}
 	my @fields= $self->field_list;
 	my $header_at= $self->header_row_at;
 	my %result;
@@ -978,7 +1003,7 @@ sub _find_table {
 			$result{fatal}= "You must enable 'static_field_order' if there is no header row";
 			return;
 		}
-		my $col_map= [ $self->has_col_map? @{$self->col_map} : @fields ];
+		my $col_map= [ @{ $self->_supplied_col_map || \@fields } ];
 		$result{found}= {
 			row_idx => -1,
 			row => undef,
@@ -1041,7 +1066,6 @@ sub _find_table {
 			if ($found) {
 				$result{found}= \%attempt;
 				$result{found}{_data_iter}= $data_iter;
-				$self->col_map($attempt{col_map});
 				$self->_log->(info => 'Found header at '.$attempt{context});
 				return \%result;
 			} else {
@@ -1049,8 +1073,8 @@ sub _find_table {
 				last dataset
 					if delete $attempt{fatal};
 				# Was this a partial match?  See if any col_map entries were added vs. what user already gave us.
-				my $initial_colmap_count= !$self->has_col_map? 0
-					: scalar(grep defined, @{$self->col_map});
+				my $initial_colmap_count= !$self->_get_col_map? 0
+					: scalar(grep defined, @{$self->_get_col_map});
 				if ($initial_colmap_count < scalar(grep defined, @{$attempt{col_map}})) {
 					# Handling of partial match determined by on_partial_match setting
 					my $act= $self->on_partial_match;
@@ -1067,19 +1091,20 @@ sub _find_table {
 	return \%result;
 }
 
-# This mode assumes all headers match exactly as perscribed in the fields list or user-supplied col_map
+# This mode assumes all headers match exactly as prescribed in the fields list or user-supplied col_map
 sub _match_headers_static {
 	my ($self, $header, $attempt)= @_;
-	my @col_map= $self->has_col_map? @{$self->col_map} : @{$self->fields};
+	my @col_map= @{ $self->_supplied_col_map || $self->fields };
 	$attempt->{col_map}= \@col_map;
 	for my $i (0 .. $#col_map) {
 		next unless defined $col_map[$i];
-		next if $header->[$i] =~ $col_map[$i]->header_regex;
+		next if defined $header->[$i] && $header->[$i] =~ $col_map[$i]->header_regex;
 		# Field header doesn't match.  Start over on next row.
-		push @{$attempt->{messages}}, [ error => "Header at column $i does not look like field ".$col_map[$i]->name ];
+		push @{$attempt->{messages}},
+			[ error => "Header at column ".($i+1)." does not look like field ".$col_map[$i]->name ];
 		return 0;
 	}
-	# found a match for every field!
+	# found a match for every mapped field
 	$self->_log->('debug','%s: Found!', $attempt->{context});
 	return 1;
 }
@@ -1089,7 +1114,7 @@ sub _match_headers_dynamic {
 	my $context= $attempt->{context};
 	my $fields= $self->fields;
 	# Colmap starts empty unless user supplied one
-	my $user_colmap= $self->has_col_map? $self->col_map : [];
+	my $user_colmap= $self->_supplied_col_map || [];
 	my @colmap= map +(defined $_? [ $_ ] : undef), @$user_colmap;
 	$attempt->{col_map}= \@colmap;
 	# Search every cell of the header, except ones specified by the user
@@ -1114,7 +1139,7 @@ sub _match_headers_dynamic {
 	for my $f (@free_fields) {
 		my $hr= $f->header_regex;
 		push @{$attempt->{messages}}, [ trace => "looking for $hr" ];
-		my @found_idx= grep $header->[$_] =~ $hr, @col_search_idx;
+		my @found_idx= grep +(defined $header->[$_] && $header->[$_] =~ $hr), @col_search_idx;
 		push @{$attempt->{messages}}, [ debug => "found ".$f->name." header at col [".join(',', map $_+1, @found_idx).']' ];
 		for my $idx (@found_idx) {
 			# If another field of the same name matches a column, the first gets priority.
@@ -1147,7 +1172,7 @@ sub _match_headers_dynamic {
 				my $val= $header->[$idx];
 				for my $f (@follows_fields) {
 					next unless grep $following{$_}, $f->follows_list;
-					next unless $val =~ $f->header_regex;
+					next unless defined $val && $val =~ $f->header_regex;
 					# If another field of the same name matches a column, the first gets priority.
 					# ignore the duplicate.
 					if ($fieldname_cols{$f->name}{$idx}) {
@@ -1257,8 +1282,9 @@ sub _match_headers_dynamic {
 }
 # Make header string readable for log messages
 sub _fmt_header_text {
-	shift if ref $_[0];
+	shift if ref $_[0]; # ignore $self, but still a method in case someone wants to subclass it
 	my $x= shift;
+	return '<undef>' unless defined $x;
 	$x =~ s/ ( [^[:print:]] ) / sprintf("\\x%02X", ord $1 ) /gex;
 	qq{"$x"};
 }
