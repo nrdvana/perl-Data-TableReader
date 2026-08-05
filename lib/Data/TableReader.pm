@@ -247,7 +247,7 @@ L</on_partial_match> setting.
   on_unknown_columns => 'warn'  # warn, and then accept these headers
   on_unknown_columns => 'error' # fail the header match for this row
   on_unknown_columns => sub {
-    my ($reader, \@headers, \@unmatched, \%candidate)= @_;
+    my ($reader, $headers, $unmatched, $candidate)= @_;
 	 # @headers is an array of the header of each column
 	 # @unmatched is an array of which @header indices are unmatched
 	 # %candidate is the structure from ->table_search_results->{candidates}
@@ -314,7 +314,7 @@ The default is C<'next'>.
       # $$value_ref is the string that failed validation
       # $message is the error returned from the validation function
       # $path is the element (and maybe sub-element) of $record
-      #   i.e.  $value_ref= \$record->{$path[0]}[$path[1]]
+      #   i.e.  $value_ref= \$record->{$path->[0]}[$path->[1]]
       # You may modify $$value_ref or $record to alter the output
     }
     # Clear the failures array to suppress warnings, if you actually corrected
@@ -663,8 +663,12 @@ sub _get_content_head {
 	my ($self, $hints)= @_;
 	unless (exists $hints->{content_head}) {
 		my $fh= $self->_file_handle;
+		if (!defined $fh) {
+			# Decoder will be using something other than a file handle anyway
+			$hints->{content_head}= undef;
+		}
 		# Need to be able to seek.
-		if (seek($fh, 0, 1)) {
+		elsif (seek($fh, 0, 1)) {
 			my $fpos= tell $fh;
 			defined read($fh, my $buf, 4096) or croak "read: $!";
 			defined seek($fh, $fpos, 0) or croak "seek: $!";
@@ -706,7 +710,7 @@ our %_decoder_mime_types= (
 	'text/tab-separated-values'        => 'TSV',
 	'application/vnd.ms-excel'         => 'XLS',
 	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'XLSX',
-	# commonly used incorrect mime types according to AI
+	# common nonstandard mime types, according to AI
 	'application/csv'                  => 'CSV',
 	'application/x-csv'                => 'CSV',
 	'text/x-csv'                       => 'CSV',
@@ -1000,8 +1004,10 @@ sub col_map {
 		if (@_ == 1 && !defined $_[0]) {
 			$self->_set_col_map($ret= undef);
 		} else {
-			@_ == 1 && ref $_[0] eq 'ARRAY' or croak 'Expected arrayref'; 
-			$self->_set_col_map($ret= $self->_resolve_colmap_names(shift));
+			@_ == 1 && ref $_[0] eq 'ARRAY' or croak 'Expected arrayref';
+			$ret= [ @{$_[0]} ];
+			$self->_resolve_colmap_names($ret);
+			$self->_set_col_map($ret);
 		}
 	} else {
 		my $supplied= $self->_get_col_map;
@@ -1014,7 +1020,7 @@ sub col_map {
 	}
 	return $ret;
 }
-# Accessor is documented to return true if an initial col_map was supplie,
+# Accessor is documented to return true if an initial col_map was supplied,
 # or if a col_map has been derived by find_table.
 sub has_col_map {
 	my $self= shift;
@@ -1295,7 +1301,6 @@ sub _match_headers_dynamic {
 
 	# Ambiguity check: there must be only one field claiming each column
 	# If it's OK, resolve the arrayref down to its single member.
-	my $col_collision= 0;
 	for my $idx (0 .. $#colmap) {
 		next unless defined $colmap[$idx];
 		if (@{$colmap[$idx]} == 1) { # only claimed by one field
