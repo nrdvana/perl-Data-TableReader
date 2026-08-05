@@ -1708,7 +1708,8 @@ sub Data::TableReader::_RecIter::tell {
 sub Data::TableReader::_RecIter::seek {
 	my ($self, $state)= @_;
 	my $fields= $self->_fields;
-	@$state == 4 or croak "Expected arrayref of 4 elements, as returned by ->tell";
+	ref $state eq 'ARRAY' && @$state == 4
+		or croak "Expected arrayref of 4 elements, as returned by ->tell";
 	my ($dec_pos, $eof, $first_blank, $n_blank)= @$state;
 	$fields->{data_iter}->seek($dec_pos);
 	${$fields->{eof}}= $eof;
