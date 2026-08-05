@@ -893,12 +893,14 @@ you like.  The following hints can be supplied as a hashref:
 
 Missing hints will be pulled from L</input> if possible, modifying the supplied hashref.
 
-The return value is the best guess of C<charset>.  This is also written into
-C<< $hints->{charset} >>.  If the content started with a byte-order-mark (BOM) the length of the
-BOM will be added to C<< $hints->{content_ofs} >>.  If an initial value for C<charset> disagrees
-with the BOM, it generates a warning, and updates to the new value.
+The return value is the best guess of C<charset> based on the content.  If the content can't be
+read, or isn't conclusive, this returns C<undef>.  If successful, the C<charset> is stored into
+C<< $hints->{charset} >> overwriting any previous value, though it doesn't clear a previously
+set C<charset> hint on failure.
 
-On failure, it returns undef.
+If the content started with a byte-order-mark (BOM) the length of the BOM will be added to
+C<< $hints->{content_ofs} >>.  Note that this means you shouldn't call C<detect_input_charset>
+twice without resetting C<content_ofs> inbetween.
 
 =cut
 
@@ -906,10 +908,12 @@ sub detect_input_charset {
 	my ($self, $hints)= @_;
 	# Need to have the content_head available
 	unless (defined $self->_get_content_head($hints)) {
+		# Use existence of the hint key as a flag for whether this has been called yet
+		# though it doesn't change the behavior of this method.
 		$hints->{charset}= undef unless exists $hints->{charset};
 		return undef;
 	}
-	my ($charset, $ofs)= ($hints->{charset}, $hints->{content_ofs});
+	my ($charset, $ofs)= (undef, $hints->{content_ofs});
 	# Check for explicit byte-order-mark
 	pos($hints->{content_head})= $ofs || 0;
 	if ($hints->{content_head} =~ /\G(?:
@@ -919,8 +923,6 @@ sub detect_input_charset {
 		| \xFE\xFF          (?{"UTF-16BE"})
 		| \xEF\xBB\xBF      (?{"utf-8-strict"})
 	)/xgc) {
-		$self->_log->('warn',"Data contains $^R BOM that disagrees with declared charset=$charset")
-			if $charset && (Encode::find_encoding($charset)||0) != (Encode::find_encoding($^R)||0);
 		$charset= $^R;
 		$ofs= $+[0];
 	}
@@ -946,7 +948,8 @@ sub detect_input_charset {
 			        : undef;
 		}
 	}
-	($hints->{charset}, $hints->{content_ofs})= ($charset, $ofs);
+	($hints->{charset}, $hints->{content_ofs})= ($charset, $ofs)
+		if defined $charset;
 	return $charset;
 }
 
