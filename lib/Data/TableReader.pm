@@ -358,8 +358,8 @@ any message that would otherwise have gone to 'warn' or 'error'.
 
 has input               => ( is => 'rw', required => 1 );
 has _file_handle        => ( is => 'lazy' );
-has _real_file_name     => ( is => 'rw', lazy => 1, builder => 1, predicate => 1 );
-has _client_file_name   => ( is => 'lazy' );
+has _real_file_name     => ( is => 'rw', lazy => 1, builder => 1 );
+has _client_file_name   => ( is => 'rw', lazy => 1, builder => 1 );
 has _decoder_arg        => ( is => 'rw', init_arg => 'decoder' );
 has decoder             => ( is => 'lazy', init_arg => undef );
 has fields              => ( is => 'rw', required => 1, coerce => \&_coerce_field_list, trigger => \&_update_fields );
@@ -502,7 +502,10 @@ sub _build__file_handle {
 
 	open(my $fh, '<', $i) or croak "open($i): $!";
 	binmode $fh;
-	$self->_real_file_name($i) if !ref $i && !$self->_has_real_file_name;
+	# This attempt to open $i was more permissive than the rules that build _real_file_name,
+	# so if open() succeeded, update that attribute with the thing we successfully opened.
+	# ...unless it was a scalar-ref.
+	$self->_real_file_name($i) unless ref $i;
 	return $fh;
 }
 
