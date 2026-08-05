@@ -1058,6 +1058,10 @@ sub _find_table {
 	my $header_at= $self->header_row_at;
 	my %result;
 
+	# It is not an error to construct a TableReader with no fields, but they must be assigned
+	# before we can attempt detecting a table.
+	croak "No fields were defined" unless @fields;
+
 	# Special case for the file not having any headers in it.
 	# If header_row_at is undef, then there is no header.
 	# Ensure static_field_order, then set up columns.
