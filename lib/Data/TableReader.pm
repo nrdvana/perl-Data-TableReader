@@ -733,7 +733,8 @@ our %_decoder_mime_types= (
 sub detect_input_format {
 	my $self= shift;
 	my $hints= @_ == 1 && ref $_[0] eq 'HASH'? $_[0]
-	         : { filename => $_[0], content_head => $_[1] };
+	         : { (defined $_[0]? (filename => $_[0]) : ()),
+	             (defined $_[1]? (content_head => $_[1]) : ()) };
 	my $input= $self->input;
 	# this and all related routines want a lowercase content type
 	$hints->{content_type}= lc($hints->{content_type})
